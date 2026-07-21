@@ -1,0 +1,63 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+  background-color: #f7f9fc;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+  color: var(--bs-secondary-color);
+  text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+  text-align: start;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1100;
+  margin: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bs-body-bg);
+  border-radius: var(--bs-border-radius);
+}
+
+.hero {
+  color: #fff;
+  background: linear-gradient(135deg, #0d6efd 0%, #084298 100%);
+}
+
+.hero-mark {
+  display: inline-grid;
+  width: 7rem;
+  height: 7rem;
+  place-items: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #0d6efd;
+  background: rgb(255 255 255 / 92%);
+  border-radius: 50%;
+}
+
+.error-page {
+  max-width: 38rem;
+  padding-block: clamp(2rem, 8vw, 6rem);
+}

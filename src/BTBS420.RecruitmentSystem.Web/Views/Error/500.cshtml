@@ -1,0 +1,10 @@
+@{
+    ViewData["Title"] = "Sunucu Hatası";
+}
+
+<section class="error-page text-center mx-auto" aria-labelledby="error-title">
+    <p class="display-1 fw-bold text-danger mb-2">500</p>
+    <h1 id="error-title" class="h2">Beklenmeyen bir hata oluştu</h1>
+    <p class="text-body-secondary">İsteğiniz şu anda tamamlanamadı. Lütfen daha sonra yeniden deneyin.</p>
+    <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Ana sayfaya dön</a>
+</section>
