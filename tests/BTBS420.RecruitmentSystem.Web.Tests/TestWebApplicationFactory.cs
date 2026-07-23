@@ -1,6 +1,11 @@
+using BTBS420.RecruitmentSystem.Web.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace BTBS420.RecruitmentSystem.Web.Tests;
@@ -22,8 +27,34 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:DefaultConnection"] = IsolatedConnectionString
+                    ["ConnectionStrings:DefaultConnection"] = IsolatedConnectionString,
+                    ["IdentityBootstrap:Enabled"] = bool.FalseString,
+                    ["IdentityBootstrap:AdminEmail"] = string.Empty,
+                    ["IdentityBootstrap:AdminPassword"] = string.Empty
                 });
+        });
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IIdentityDataSeeder>();
+            services.AddSingleton<IIdentityDataSeeder, NoOpIdentityDataSeeder>();
+
+            services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme =
+                        TestAuthenticationHandler.SchemeName;
+                    options.DefaultChallengeScheme =
+                        TestAuthenticationHandler.SchemeName;
+                    options.DefaultForbidScheme =
+                        TestAuthenticationHandler.SchemeName;
+                })
+                .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
+                    TestAuthenticationHandler.SchemeName,
+                    _ => { });
+
+            services
+                .AddControllersWithViews()
+                .AddApplicationPart(typeof(AuthorizationProbeController).Assembly);
         });
     }
 
@@ -47,5 +78,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         }
 
         throw new DirectoryNotFoundException("Web projesinin içerik kökü bulunamadı.");
+    }
+
+    private sealed class NoOpIdentityDataSeeder : IIdentityDataSeeder
+    {
+        public Task SeedAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

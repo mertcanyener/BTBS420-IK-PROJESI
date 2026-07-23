@@ -44,6 +44,7 @@ public sealed class ApplicationSmokeTests : IClassFixture<TestWebApplicationFact
     }
 
     [Theory]
+    [InlineData("/Error/401", HttpStatusCode.Unauthorized, "Oturum açmanız gerekiyor")]
     [InlineData("/Error/403", HttpStatusCode.Forbidden, "Erişim reddedildi")]
     [InlineData("/Error/404", HttpStatusCode.NotFound, "Sayfa bulunamadı")]
     [InlineData("/Error/500", HttpStatusCode.InternalServerError, "Beklenmeyen bir hata oluştu")]

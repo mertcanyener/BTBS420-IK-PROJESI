@@ -1,0 +1,10 @@
+@{
+    ViewData["Title"] = "Oturum Gerekli";
+}
+
+<section class="error-page text-center mx-auto" aria-labelledby="error-title">
+    <p class="display-1 fw-bold text-primary mb-2">401</p>
+    <h1 id="error-title" class="h2">Oturum açmanız gerekiyor</h1>
+    <p class="text-body-secondary">Bu sayfaya erişmek için geçerli bir kullanıcı hesabıyla oturum açın.</p>
+    <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Ana sayfaya dön</a>
+</section>
