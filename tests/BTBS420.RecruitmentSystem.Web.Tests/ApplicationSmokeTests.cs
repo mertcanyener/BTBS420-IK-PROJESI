@@ -1,27 +1,32 @@
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BTBS420.RecruitmentSystem.Web.Tests;
 
-public sealed class ApplicationSmokeTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ApplicationSmokeTests : IClassFixture<TestWebApplicationFactory>
 {
+    private readonly TestWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
-    public ApplicationSmokeTests(WebApplicationFactory<Program> factory)
+    public ApplicationSmokeTests(TestWebApplicationFactory factory)
     {
-        _client = factory
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseContentRoot(FindWebContentRoot());
-                builder.ConfigureLogging(logging => logging.ClearProviders());
-            })
-            .CreateClient(new WebApplicationFactoryClientOptions
-            {
-                AllowAutoRedirect = false,
-                BaseAddress = new Uri("https://localhost")
-            });
+        _factory = factory;
+        _client = factory.CreateClient(new()
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+    }
+
+    [Fact]
+    public async Task Uygulama_TestOrtamindaAyagaKalkar()
+    {
+        var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
+        var response = await _client.GetAsync("/");
+
+        Assert.Equal(TestWebApplicationFactory.EnvironmentName, environment.EnvironmentName);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -74,25 +79,4 @@ public sealed class ApplicationSmokeTests : IClassFixture<WebApplicationFactory<
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    private static string FindWebContentRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(
-                directory.FullName,
-                "src",
-                "BTBS420.RecruitmentSystem.Web");
-
-            if (File.Exists(Path.Combine(candidate, "BTBS420.RecruitmentSystem.Web.csproj")))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Web projesinin içerik kökü bulunamadı.");
-    }
 }

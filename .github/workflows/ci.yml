@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Restore, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore BTBS420.RecruitmentSystem.sln
+
+      - name: Build
+        run: dotnet build BTBS420.RecruitmentSystem.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test BTBS420.RecruitmentSystem.sln --configuration Release --no-build --no-restore
