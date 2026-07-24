@@ -1,3 +1,4 @@
+using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Identity;
@@ -8,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();
@@ -43,6 +45,10 @@ builder.Services.Configure<IdentityBootstrapOptions>(
 builder.Services.AddScoped<IdentityRoleSeeder>();
 builder.Services.AddScoped<InitialAdminSeeder>();
 builder.Services.AddScoped<IIdentityDataSeeder, IdentityDataSeeder>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton<IActivityLogRedactor, ActivityLogRedactor>();
+builder.Services.AddScoped<ICurrentActorAccessor, HttpContextCurrentActorAccessor>();
+builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 
 var app = builder.Build();
 
