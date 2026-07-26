@@ -1,0 +1,84 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Notifications.NotificationIndexViewModel
+
+@{
+    ViewData["Title"] = "Bildirimler";
+}
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Bildirimler</h1>
+        <p class="text-body-secondary mb-0">Size gönderilen bildirimleri en yeniden eskiye görüntüleyin.</p>
+    </div>
+
+    @if (Model.UnreadCount > 0)
+    {
+        <form asp-controller="Notifications"
+              asp-action="MarkAllAsRead"
+              method="post"
+              asp-antiforgery="true">
+            <button class="btn btn-outline-primary" type="submit">
+                Tümünü okundu olarak işaretle
+            </button>
+        </form>
+    }
+</div>
+
+@if (Model.Notifications.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <h2 class="h5">Henüz bildiriminiz yok</h2>
+            <p class="text-body-secondary mb-0">
+                Yeni bir bildiriminiz olduğunda burada görüntülenecek.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <ol class="list-group shadow-sm" aria-label="Bildirim listesi">
+        @foreach (var notification in Model.Notifications)
+        {
+            var itemClass = notification.IsRead
+                ? "list-group-item"
+                : "list-group-item list-group-item-primary";
+            var createdAtUtc = notification.CreatedAtUtc
+                .ToUniversalTime()
+                .ToString("dd.MM.yyyy HH:mm 'UTC'");
+
+            <li class="@itemClass">
+                <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <h2 class="h5 mb-0 text-break">@notification.Title</h2>
+                            @if (!notification.IsRead)
+                            {
+                                <span class="badge text-bg-primary">Okunmadı</span>
+                            }
+                        </div>
+                        <p class="mb-2 text-break">@notification.Message</p>
+                        <small class="text-body-secondary">
+                            <time datetime="@notification.CreatedAtUtc.ToUniversalTime().ToString("O")">
+                                @createdAtUtc
+                            </time>
+                        </small>
+                    </div>
+
+                    @if (!notification.IsRead)
+                    {
+                        <form asp-controller="Notifications"
+                              asp-action="MarkAsRead"
+                              asp-route-id="@notification.Id"
+                              method="post"
+                              asp-antiforgery="true"
+                              class="align-self-md-center">
+                            <button class="btn btn-sm btn-primary" type="submit">
+                                Okundu olarak işaretle
+                            </button>
+                        </form>
+                    }
+                </div>
+            </li>
+        }
+    </ol>
+}

@@ -11,6 +11,8 @@ public sealed class ApplicationDbContext(
 {
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -49,6 +51,7 @@ public sealed class ApplicationDbContext(
             .HasDefaultValue(true);
 
         builder.ApplyConfiguration(new ActivityLogConfiguration());
+        builder.ApplyConfiguration(new NotificationConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()

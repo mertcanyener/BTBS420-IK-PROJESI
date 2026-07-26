@@ -27,6 +27,12 @@
                         <li class="nav-item">
                             <a class="nav-link active" aria-current="page" asp-area="" asp-controller="Home" asp-action="Index">Ana Sayfa</a>
                         </li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item">
+                                @await Component.InvokeAsync("NotificationMenu")
+                            </li>
+                        }
                     </ul>
                 </div>
             </div>

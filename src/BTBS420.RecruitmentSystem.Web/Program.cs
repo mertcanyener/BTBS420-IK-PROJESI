@@ -3,6 +3,7 @@ using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Identity;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,6 +50,11 @@ builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<IActivityLogRedactor, ActivityLogRedactor>();
 builder.Services.AddScoped<ICurrentActorAccessor, HttpContextCurrentActorAccessor>();
 builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<INotificationPublisher>(
+    serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
+builder.Services.AddScoped<INotificationCenterService>(
+    serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
 
 var app = builder.Build();
 

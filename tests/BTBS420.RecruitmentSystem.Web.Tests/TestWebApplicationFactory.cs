@@ -1,5 +1,7 @@
 using BTBS420.RecruitmentSystem.Web.Identity;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -12,10 +14,27 @@ namespace BTBS420.RecruitmentSystem.Web.Tests;
 
 public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
+    private readonly Func<IServiceProvider, INotificationCenterService>?
+        _notificationCenterServiceFactory;
+
     internal const string EnvironmentName = "Testing";
     internal const string IsolatedConnectionString =
         "Server=sql.test.invalid;Database=BTBS420_IsolatedTests;" +
         "Integrated Security=True;Encrypt=True;TrustServerCertificate=True;Connect Timeout=1";
+
+    public TestWebApplicationFactory()
+    {
+    }
+
+    internal TestWebApplicationFactory(
+        Func<IServiceProvider, INotificationCenterService>
+            notificationCenterServiceFactory)
+    {
+        _notificationCenterServiceFactory =
+            notificationCenterServiceFactory ??
+            throw new ArgumentNullException(
+                nameof(notificationCenterServiceFactory));
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -37,6 +56,24 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IIdentityDataSeeder>();
             services.AddSingleton<IIdentityDataSeeder, NoOpIdentityDataSeeder>();
+            services.RemoveAll<IDataProtectionProvider>();
+            services.AddSingleton<IDataProtectionProvider>(
+                new EphemeralDataProtectionProvider());
+            services.RemoveAll<INotificationPublisher>();
+            services.RemoveAll<INotificationCenterService>();
+            services.AddSingleton<NoOpNotificationService>();
+            services.AddSingleton<INotificationPublisher>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<NoOpNotificationService>());
+            services.AddSingleton<INotificationCenterService>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<NoOpNotificationService>());
+
+            if (_notificationCenterServiceFactory is not null)
+            {
+                services.RemoveAll<INotificationCenterService>();
+                services.AddScoped(_notificationCenterServiceFactory);
+            }
 
             services
                 .AddAuthentication(options =>
@@ -85,6 +122,43 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         public Task SeedAsync(CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NoOpNotificationService :
+        INotificationPublisher,
+        INotificationCenterService
+    {
+        public Task<bool> StageIfMissingAsync(
+            NotificationEntry entry,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
+
+        public Task<IReadOnlyList<NotificationListItem>> GetNotificationsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<NotificationListItem>>([]);
+        }
+
+        public Task<int> GetUnreadCountAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(0);
+        }
+
+        public Task<bool> MarkAsReadAsync(
+            long notificationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
+
+        public Task<int> MarkAllAsReadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(0);
         }
     }
 }

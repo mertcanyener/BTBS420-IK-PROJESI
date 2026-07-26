@@ -14,6 +14,8 @@ internal sealed class TestAuthenticationHandler(
 {
     internal const string SchemeName = "Kan22Test";
     internal const string RoleHeaderName = "X-Test-Role";
+    internal const string UserIdHeaderName = "X-Test-User-Id";
+    internal const string DefaultUserId = "kan22-test-user";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -24,9 +26,14 @@ internal sealed class TestAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
+        var requestedUserId = Request.Headers[UserIdHeaderName].ToString();
+        var userId = string.IsNullOrWhiteSpace(requestedUserId)
+            ? DefaultUserId
+            : requestedUserId.Trim();
+
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, "kan22-test-user"),
+            new Claim(ClaimTypes.NameIdentifier, userId),
             new Claim(ClaimTypes.Name, "KAN-22 Test User"),
             new Claim(ClaimTypes.Role, roleName)
         };
