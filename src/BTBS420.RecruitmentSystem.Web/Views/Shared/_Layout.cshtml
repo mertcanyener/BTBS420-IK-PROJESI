@@ -32,6 +32,17 @@
                             <li class="nav-item">
                                 @await Component.InvokeAsync("NotificationMenu")
                             </li>
+                            <li class="nav-item">
+                                <form asp-controller="Account" asp-action="Logout" method="post" asp-antiforgery="true">
+                                    <button type="submit" class="btn btn-link nav-link">Çıkış Yap</button>
+                                </form>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Account" asp-action="Login">Giriş Yap</a>
+                            </li>
                         }
                     </ul>
                 </div>
