@@ -29,6 +29,26 @@
                         </li>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" id="adminMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Yönetim
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenuDropdown">
+                                        <li><a class="dropdown-item" asp-controller="Departments" asp-action="Index">Departmanlar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Positions" asp-action="Index">Pozisyonlar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Users" asp-action="Index">Kullanıcılar</a></li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><h6 class="dropdown-header">Filtre Katalogları</h6></li>
+                                        <li><a class="dropdown-item" asp-controller="Skills" asp-action="Index">Yetkinlikler</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Educations" asp-action="Index">Eğitimler</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Languages" asp-action="Index">Diller</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Locations" asp-action="Index">Konumlar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="ExperienceRanges" asp-action="Index">Deneyim Aralıkları</a></li>
+                                    </ul>
+                                </li>
+                            }
                             <li class="nav-item">
                                 @await Component.InvokeAsync("NotificationMenu")
                             </li>
