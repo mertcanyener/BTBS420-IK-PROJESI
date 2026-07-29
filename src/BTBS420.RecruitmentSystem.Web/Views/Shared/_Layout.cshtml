@@ -35,6 +35,12 @@
                                     <a class="nav-link" asp-controller="JobPostings" asp-action="Index">İlanlar</a>
                                 </li>
                             }
+                            @if (User.IsInRole("Aday"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="CandidateProfile" asp-action="Index">Profilim</a>
+                                </li>
+                            }
                             @if (User.IsInRole("Admin"))
                             {
                                 <li class="nav-item dropdown">

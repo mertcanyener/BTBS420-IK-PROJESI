@@ -33,6 +33,12 @@ public sealed class ApplicationDbContext(
 
     public DbSet<ExperienceRange> ExperienceRanges => Set<ExperienceRange>();
 
+    public DbSet<CandidateProfile> CandidateProfiles => Set<CandidateProfile>();
+
+    public DbSet<CandidateProfileSkill> CandidateProfileSkills => Set<CandidateProfileSkill>();
+
+    public DbSet<CandidateProfileLanguage> CandidateProfileLanguages => Set<CandidateProfileLanguage>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -95,6 +101,9 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new LanguageConfiguration());
         builder.ApplyConfiguration(new LocationConfiguration());
         builder.ApplyConfiguration(new ExperienceRangeConfiguration());
+        builder.ApplyConfiguration(new CandidateProfileConfiguration());
+        builder.ApplyConfiguration(new CandidateProfileSkillConfiguration());
+        builder.ApplyConfiguration(new CandidateProfileLanguageConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()
