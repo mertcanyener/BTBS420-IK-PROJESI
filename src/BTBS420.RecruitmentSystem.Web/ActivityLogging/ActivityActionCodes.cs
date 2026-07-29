@@ -7,6 +7,7 @@ public static class ActivityActionCodes
     public const string AuthenticationSucceeded = "authentication.succeeded";
     public const string AuthenticationFailed = "authentication.failed";
     public const string AuthenticationSignedOut = "authentication.signed-out";
+    public const string UserRegistered = "user.registered";
     public const string AuthorizationDenied = "authorization.denied";
     public const string EntityCreated = "entity.created";
     public const string EntityUpdated = "entity.updated";
@@ -20,6 +21,7 @@ public static class ActivityActionCodes
             AuthenticationSucceeded,
             AuthenticationFailed,
             AuthenticationSignedOut,
+            UserRegistered,
             AuthorizationDenied,
             EntityCreated,
             EntityUpdated,

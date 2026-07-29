@@ -10,6 +10,11 @@
             <div class="card-body p-4">
                 <h1 class="h3 mb-4">Giriş Yap</h1>
 
+                @if (TempData["RegistrationSuccessMessage"] is string registrationSuccessMessage)
+                {
+                    <div class="alert alert-success" role="alert">@registrationSuccessMessage</div>
+                }
+
                 <form asp-controller="Account" asp-action="Login" method="post" asp-antiforgery="true" novalidate>
                     <input type="hidden" asp-for="ReturnUrl" />
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
@@ -28,6 +33,10 @@
 
                     <button type="submit" class="btn btn-primary w-100">Giriş Yap</button>
                 </form>
+
+                <p class="mt-3 mb-0 text-center">
+                    <a asp-controller="Account" asp-action="Register">Hesabınız yok mu? Kayıt Ol</a>
+                </p>
             </div>
         </div>
     </div>

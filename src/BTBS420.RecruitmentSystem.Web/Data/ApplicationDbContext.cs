@@ -50,6 +50,12 @@ public sealed class ApplicationDbContext(
             .Property(user => user.IsActive)
             .HasDefaultValue(true);
 
+        builder.Entity<ApplicationUser>()
+            .HasIndex(user => user.NormalizedEmail)
+            .HasDatabaseName("EmailIndex")
+            .IsUnique()
+            .HasFilter("[NormalizedEmail] IS NOT NULL");
+
         builder.ApplyConfiguration(new ActivityLogConfiguration());
         builder.ApplyConfiguration(new NotificationConfiguration());
     }
