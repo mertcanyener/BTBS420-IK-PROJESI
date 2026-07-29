@@ -35,6 +35,9 @@ public sealed class JobPostingFormViewModel
     [Display(Name = "Son Başvuru Tarihi")]
     public DateOnly? ApplicationDeadline { get; set; }
 
+    [Display(Name = "Şirket İçi İlan")]
+    public bool IsInternal { get; set; }
+
     public string? RowVersion { get; set; }
 
     public IReadOnlyList<SelectOptionViewModel> PositionOptions { get; set; } = [];

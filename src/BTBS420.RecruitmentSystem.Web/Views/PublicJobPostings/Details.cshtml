@@ -1,0 +1,32 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.PublicJobPostings.PublicJobPostingDetailViewModel
+
+@{
+    ViewData["Title"] = "İlan Detayı";
+}
+
+<h1 class="h2 mb-4">İlan Detayı</h1>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Başlık</dt>
+            <dd class="col-sm-9">@Model.Title</dd>
+
+            <dt class="col-sm-3">Açıklama</dt>
+            <dd class="col-sm-9">@Model.Description</dd>
+
+            <dt class="col-sm-3">Pozisyon</dt>
+            <dd class="col-sm-9">@Model.PositionName</dd>
+
+            <dt class="col-sm-3">Departman</dt>
+            <dd class="col-sm-9">@Model.DepartmentName</dd>
+
+            <dt class="col-sm-3">Son Başvuru Tarihi</dt>
+            <dd class="col-sm-9">@Model.ApplicationDeadline.ToString("dd.MM.yyyy")</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a class="btn btn-outline-secondary" asp-controller="PublicJobPostings" asp-action="Index">Listeye Dön</a>
+</div>

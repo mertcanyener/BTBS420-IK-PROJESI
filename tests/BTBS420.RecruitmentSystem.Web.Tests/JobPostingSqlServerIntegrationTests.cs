@@ -539,6 +539,210 @@ public sealed class JobPostingSqlServerIntegrationTests :
         Assert.Equal(JobPostingStatuses.Archived, finalJobPosting.Status);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task PublicJobPostings_SadeceYayindaVeDisaAcikIlanlarGorunur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan48-VisDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan48-VisPos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+
+        var publishedTitle = $"Kan48-Published-{runId}";
+        var publishedId = await CreateJobPostingAsync(factory, positionId, recruiterId, publishedTitle);
+        using (var client = CreateClient(factory))
+        {
+            await PostChangeStatusAsync(
+                client,
+                publishedId,
+                JobPostingStatuses.Published,
+                SystemRoles.Admin,
+                TestAuthenticationHandler.DefaultUserId);
+        }
+
+        var draftTitle = $"Kan48-Draft-{runId}";
+        await CreateJobPostingAsync(factory, positionId, recruiterId, draftTitle);
+
+        var internalTitle = $"Kan48-Internal-{runId}";
+        var internalId = await CreateJobPostingAsync(
+            factory,
+            positionId,
+            recruiterId,
+            internalTitle,
+            isInternal: true);
+        using (var client = CreateClient(factory))
+        {
+            await PostChangeStatusAsync(
+                client,
+                internalId,
+                JobPostingStatuses.Published,
+                SystemRoles.Admin,
+                TestAuthenticationHandler.DefaultUserId);
+        }
+
+        var body = await GetPublicIndexBodyAsync(factory);
+
+        Assert.Contains(publishedTitle, body);
+        Assert.DoesNotContain(draftTitle, body);
+        Assert.DoesNotContain(internalTitle, body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task PublicJobPostings_PozisyonFiltresiCalisir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan48-FilterDept-{runId}");
+        var matchingPositionId = await CreatePositionAsync(
+            factory,
+            departmentId,
+            $"Kan48-MatchPos-{runId}");
+        var otherPositionId = await CreatePositionAsync(
+            factory,
+            departmentId,
+            $"Kan48-OtherPos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+
+        var matchingTitle = $"Kan48-Match-{runId}";
+        var matchingId = await CreateJobPostingAsync(factory, matchingPositionId, recruiterId, matchingTitle);
+        var otherTitle = $"Kan48-Other-{runId}";
+        var otherId = await CreateJobPostingAsync(factory, otherPositionId, recruiterId, otherTitle);
+
+        using (var client = CreateClient(factory))
+        {
+            await PostChangeStatusAsync(
+                client,
+                matchingId,
+                JobPostingStatuses.Published,
+                SystemRoles.Admin,
+                TestAuthenticationHandler.DefaultUserId);
+            await PostChangeStatusAsync(
+                client,
+                otherId,
+                JobPostingStatuses.Published,
+                SystemRoles.Admin,
+                TestAuthenticationHandler.DefaultUserId);
+        }
+
+        var body = await GetPublicIndexBodyAsync(factory, $"?positionId={matchingPositionId}");
+
+        Assert.Contains(matchingTitle, body);
+        Assert.DoesNotContain(otherTitle, body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task PublicJobPostings_SayfalamaDogruCalisir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan48-PageDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan48-PagePos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+
+        var firstTitle = $"Kan48-Page1-{runId}";
+        var secondTitle = $"Kan48-Page2-{runId}";
+        var firstId = await CreateJobPostingAsync(
+            factory,
+            positionId,
+            recruiterId,
+            firstTitle,
+            deadlineDays: 10);
+        var secondId = await CreateJobPostingAsync(
+            factory,
+            positionId,
+            recruiterId,
+            secondTitle,
+            deadlineDays: 20);
+
+        using (var client = CreateClient(factory))
+        {
+            await PostChangeStatusAsync(
+                client,
+                firstId,
+                JobPostingStatuses.Published,
+                SystemRoles.Admin,
+                TestAuthenticationHandler.DefaultUserId);
+            await PostChangeStatusAsync(
+                client,
+                secondId,
+                JobPostingStatuses.Published,
+                SystemRoles.Admin,
+                TestAuthenticationHandler.DefaultUserId);
+        }
+
+        var firstPageBody = await GetPublicIndexBodyAsync(factory, $"?positionId={positionId}&page=1&pageSize=1");
+        Assert.Contains(firstTitle, firstPageBody);
+        Assert.DoesNotContain(secondTitle, firstPageBody);
+
+        var secondPageBody = await GetPublicIndexBodyAsync(factory, $"?positionId={positionId}&page=2&pageSize=1");
+        Assert.Contains(secondTitle, secondPageBody);
+        Assert.DoesNotContain(firstTitle, secondPageBody);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task PublicJobPostings_TaslakVeyaIcIlanDetayi404Doner()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan48-DetailDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan48-DetailPos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var draftTitle = $"Kan48-DraftDetail-{runId}";
+        var draftId = await CreateJobPostingAsync(factory, positionId, recruiterId, draftTitle);
+
+        using var client = CreateClient(factory);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/PublicJobPostings/Details/{draftId}");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task PublicJobPostings_YayindaVeDisaAcikIlanDetayGosterir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan48-ShowDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan48-ShowPos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var title = $"Kan48-ShowDetail-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/PublicJobPostings/Details/{jobPostingId}");
+
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(title, body);
+    }
+
+    private static async Task<string> GetPublicIndexBodyAsync(
+        WebApplicationFactory<Program> factory,
+        string queryString = "")
+    {
+        using var client = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/PublicJobPostings{queryString}");
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
     private static async Task<HttpResponseMessage> PostDeleteAsync(
         HttpClient client,
         int jobPostingId,
@@ -612,7 +816,8 @@ public sealed class JobPostingSqlServerIntegrationTests :
         int positionId,
         string responsibleUserId,
         string title,
-        int deadlineDays = 30)
+        int deadlineDays = 30,
+        bool isInternal = false)
     {
         using var client = CreateClient(factory);
         var response = await PostAsync(
@@ -624,7 +829,8 @@ public sealed class JobPostingSqlServerIntegrationTests :
                 ["Description"] = "İlan açıklaması",
                 ["PositionId"] = positionId.ToString(),
                 ["ResponsibleUserId"] = responsibleUserId,
-                ["ApplicationDeadline"] = FutureDeadline(deadlineDays)
+                ["ApplicationDeadline"] = FutureDeadline(deadlineDays),
+                ["IsInternal"] = isInternal.ToString()
             });
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
 

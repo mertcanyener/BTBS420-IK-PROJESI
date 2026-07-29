@@ -32,6 +32,10 @@ public sealed class JobPostingConfiguration : IEntityTypeConfiguration<JobPostin
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(jobPosting => jobPosting.IsInternal)
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.Property(jobPosting => jobPosting.RowVersion)
             .IsRowVersion();
 

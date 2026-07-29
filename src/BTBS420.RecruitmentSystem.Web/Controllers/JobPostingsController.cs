@@ -175,7 +175,8 @@ public sealed class JobPostingsController(
                 model.PositionId!.Value,
                 model.ResponsibleUserId!,
                 model.ApplicationDeadline!.Value,
-                today);
+                today,
+                model.IsInternal);
         }
         catch (ArgumentException exception)
         {
@@ -216,6 +217,7 @@ public sealed class JobPostingsController(
             PositionId = jobPosting.PositionId,
             ResponsibleUserId = jobPosting.ResponsibleUserId,
             ApplicationDeadline = jobPosting.ApplicationDeadline,
+            IsInternal = jobPosting.IsInternal,
             RowVersion = Convert.ToBase64String(jobPosting.RowVersion)
         };
 
@@ -265,7 +267,8 @@ public sealed class JobPostingsController(
                 model.PositionId!.Value,
                 model.ResponsibleUserId!,
                 model.ApplicationDeadline!.Value,
-                today);
+                today,
+                model.IsInternal);
         }
         catch (ArgumentException exception)
         {

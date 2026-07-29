@@ -15,13 +15,15 @@ public sealed class JobPosting
         int positionId,
         string responsibleUserId,
         DateOnly applicationDeadline,
-        DateOnly today)
+        DateOnly today,
+        bool isInternal = false)
     {
         Title = NormalizeTitle(title);
         Description = NormalizeDescription(description);
         PositionId = positionId;
         ResponsibleUserId = NormalizeResponsibleUserId(responsibleUserId);
         ApplicationDeadline = ValidateDeadline(applicationDeadline, today);
+        IsInternal = isInternal;
         Status = JobPostingStatuses.Draft;
     }
 
@@ -43,6 +45,8 @@ public sealed class JobPosting
 
     public string Status { get; private set; } = JobPostingStatuses.Draft;
 
+    public bool IsInternal { get; private set; }
+
     public byte[] RowVersion { get; private set; } = [];
 
     internal void ChangeStatus(string newStatus)
@@ -62,13 +66,15 @@ public sealed class JobPosting
         int positionId,
         string responsibleUserId,
         DateOnly applicationDeadline,
-        DateOnly today)
+        DateOnly today,
+        bool isInternal)
     {
         Title = NormalizeTitle(title);
         Description = NormalizeDescription(description);
         PositionId = positionId;
         ResponsibleUserId = NormalizeResponsibleUserId(responsibleUserId);
         ApplicationDeadline = ValidateDeadline(applicationDeadline, today);
+        IsInternal = isInternal;
     }
 
     private static string NormalizeTitle(string title)

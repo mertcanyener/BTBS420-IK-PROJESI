@@ -54,6 +54,11 @@
                 <span asp-validation-for="ApplicationDeadline" class="text-danger"></span>
             </div>
 
+            <div class="mb-3 form-check">
+                <input asp-for="IsInternal" class="form-check-input" />
+                <label asp-for="IsInternal" class="form-check-label"></label>
+            </div>
+
             <button type="submit" class="btn btn-primary">Kaydet</button>
             <a class="btn btn-outline-secondary" asp-controller="JobPostings" asp-action="Index">Vazgeç</a>
         </form>
