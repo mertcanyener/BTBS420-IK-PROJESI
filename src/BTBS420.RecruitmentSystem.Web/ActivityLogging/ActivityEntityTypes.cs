@@ -11,6 +11,11 @@ public static class ActivityEntityTypes
     public const string JobFamily = "job-family";
     public const string Seniority = "seniority";
     public const string Position = "position";
+    public const string Skill = "skill";
+    public const string Education = "education";
+    public const string Language = "language";
+    public const string Location = "location";
+    public const string ExperienceRange = "experience-range";
     public const string JobPosting = "job-posting";
     public const string Candidate = "candidate";
     public const string Application = "application";
@@ -28,6 +33,11 @@ public static class ActivityEntityTypes
             JobFamily,
             Seniority,
             Position,
+            Skill,
+            Education,
+            Language,
+            Location,
+            ExperienceRange,
             JobPosting,
             Candidate,
             Application,

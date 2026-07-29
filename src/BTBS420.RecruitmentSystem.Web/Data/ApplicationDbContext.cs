@@ -21,6 +21,16 @@ public sealed class ApplicationDbContext(
 
     public DbSet<Position> Positions => Set<Position>();
 
+    public DbSet<Skill> Skills => Set<Skill>();
+
+    public DbSet<Education> Educations => Set<Education>();
+
+    public DbSet<Language> Languages => Set<Language>();
+
+    public DbSet<Location> Locations => Set<Location>();
+
+    public DbSet<ExperienceRange> ExperienceRanges => Set<ExperienceRange>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -70,6 +80,11 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new JobFamilyConfiguration());
         builder.ApplyConfiguration(new SeniorityConfiguration());
         builder.ApplyConfiguration(new PositionConfiguration());
+        builder.ApplyConfiguration(new SkillConfiguration());
+        builder.ApplyConfiguration(new EducationConfiguration());
+        builder.ApplyConfiguration(new LanguageConfiguration());
+        builder.ApplyConfiguration(new LocationConfiguration());
+        builder.ApplyConfiguration(new ExperienceRangeConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()
