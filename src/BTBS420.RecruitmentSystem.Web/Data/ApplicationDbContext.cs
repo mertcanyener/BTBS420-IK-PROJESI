@@ -74,6 +74,13 @@ public sealed class ApplicationDbContext(
             .IsUnique()
             .HasFilter("[NormalizedEmail] IS NOT NULL");
 
+        builder.Entity<ApplicationUser>()
+            .HasOne(user => user.Department)
+            .WithMany()
+            .HasForeignKey(user => user.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
         builder.ApplyConfiguration(new ActivityLogConfiguration());
         builder.ApplyConfiguration(new NotificationConfiguration());
         builder.ApplyConfiguration(new DepartmentConfiguration());
