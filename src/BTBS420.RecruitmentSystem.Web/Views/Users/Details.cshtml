@@ -83,3 +83,38 @@
         }
     }
 </div>
+
+<h2 class="h4 mt-4 mb-3">İşlem Geçmişi</h2>
+
+@if (Model.ActivityLog.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Bu kullanıcıya ait işlem kaydı bulunamadı.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Tarih</th>
+                <th scope="col">Yapan</th>
+                <th scope="col">Olay</th>
+                <th scope="col">Açıklama</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in Model.ActivityLog)
+            {
+                <tr>
+                    <td>@entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@entry.ActorName</td>
+                    <td>@entry.ActionLabel</td>
+                    <td>@entry.Summary</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -155,6 +155,7 @@ public sealed class UsersController(
         }
 
         var roles = await userManager.GetRolesAsync(user);
+        var activityLog = await GetUserActivityLogAsync(user.Id, cancellationToken);
 
         return View(
             new UserDetailsViewModel(
@@ -163,7 +164,8 @@ public sealed class UsersController(
                 user.Email,
                 roles.OrderBy(roleName => roleName).ToList(),
                 user.Department?.Name,
-                user.IsActive));
+                user.IsActive,
+                activityLog));
     }
 
     [HttpGet]
@@ -384,6 +386,7 @@ public sealed class UsersController(
         }
 
         var currentRoles = await userManager.GetRolesAsync(user);
+        var previousRole = currentRoles.FirstOrDefault(InternalRoles.Contains) ?? "-";
         var rolesToRemove = currentRoles.Where(InternalRoles.Contains).ToList();
 
         try
@@ -433,7 +436,7 @@ public sealed class UsersController(
         activityLogService.Stage(
             new ActivityLogEntry(
                 ActivityActionCodes.EntityUpdated,
-                "İç kullanıcı güncellendi.",
+                $"İç kullanıcı güncellendi. Rol: {previousRole} -> {model.Role}.",
                 ActivityEntityTypes.User,
                 user.Id));
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -535,6 +538,67 @@ public sealed class UsersController(
             .CountAsync(cancellationToken);
 
         return activeAdminCount <= 1;
+    }
+
+    private async Task<IReadOnlyList<UserActivityLogEntryViewModel>> GetUserActivityLogAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var entries = await dbContext.ActivityLogs
+            .Where(
+                log =>
+                    log.TargetEntityType == ActivityEntityTypes.User &&
+                    log.TargetEntityId == userId &&
+                    (log.ActionCode == ActivityActionCodes.EntityCreated ||
+                        log.ActionCode == ActivityActionCodes.EntityUpdated ||
+                        log.ActionCode == ActivityActionCodes.EntityStatusChanged))
+            .OrderByDescending(log => log.OccurredAtUtc)
+            .Select(
+                log => new
+                {
+                    log.OccurredAtUtc,
+                    log.ActorUserId,
+                    log.ActionCode,
+                    log.Summary
+                })
+            .ToListAsync(cancellationToken);
+
+        var actorIds = entries
+            .Where(entry => entry.ActorUserId != null)
+            .Select(entry => entry.ActorUserId!)
+            .Distinct()
+            .ToList();
+
+        var actorNames = await dbContext.Users
+            .Where(actor => actorIds.Contains(actor.Id))
+            .Select(actor => new { actor.Id, actor.UserName })
+            .ToDictionaryAsync(
+                actor => actor.Id,
+                actor => actor.UserName ?? string.Empty,
+                cancellationToken);
+
+        return entries
+            .Select(
+                entry => new UserActivityLogEntryViewModel(
+                    entry.OccurredAtUtc,
+                    entry.ActorUserId is not null &&
+                        actorNames.TryGetValue(entry.ActorUserId, out var actorName)
+                        ? actorName
+                        : "-",
+                    DescribeActionCode(entry.ActionCode),
+                    entry.Summary))
+            .ToList();
+    }
+
+    private static string DescribeActionCode(string actionCode)
+    {
+        return actionCode switch
+        {
+            ActivityActionCodes.EntityCreated => "Oluşturuldu",
+            ActivityActionCodes.EntityUpdated => "Güncellendi",
+            ActivityActionCodes.EntityStatusChanged => "Durum Değişti",
+            _ => actionCode
+        };
     }
 
     private async Task<IActionResult> ReturnCreateViewWithOptionsAsync(

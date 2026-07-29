@@ -6,4 +6,5 @@ public sealed record UserDetailsViewModel(
     string? Email,
     IReadOnlyList<string> Roles,
     string? DepartmentName,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<UserActivityLogEntryViewModel> ActivityLog);
