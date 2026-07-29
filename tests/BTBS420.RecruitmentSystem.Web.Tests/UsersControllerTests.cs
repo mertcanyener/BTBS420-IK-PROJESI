@@ -3,6 +3,7 @@ using System.Reflection;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Controllers;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace BTBS420.RecruitmentSystem.Web.Tests;
@@ -19,6 +20,8 @@ public sealed class UsersControllerTests : IClassFixture<TestWebApplicationFacto
     [Theory]
     [InlineData("GET", "/Users")]
     [InlineData("GET", "/Users/Details/kan37-test-user")]
+    [InlineData("GET", "/Users/Create")]
+    [InlineData("GET", "/Users/Edit/kan37-test-user")]
     public async Task KorumaliUclar_AnonimKullaniciyiReddeder(string method, string path)
     {
         using var client = CreateClient();
@@ -32,6 +35,8 @@ public sealed class UsersControllerTests : IClassFixture<TestWebApplicationFacto
     [Theory]
     [InlineData("GET", "/Users")]
     [InlineData("GET", "/Users/Details/kan37-test-user")]
+    [InlineData("GET", "/Users/Create")]
+    [InlineData("GET", "/Users/Edit/kan37-test-user")]
     public async Task KorumaliUclar_AdminOlmayanRoluReddeder(string method, string path)
     {
         using var client = CreateClient();
@@ -43,6 +48,21 @@ public sealed class UsersControllerTests : IClassFixture<TestWebApplicationFacto
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/Users/Create")]
+    [InlineData("/Users/Edit/kan37-test-user")]
+    public async Task MutasyonUclari_AntiforgeryTokenOlmadanReddeder(string path)
+    {
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Admin);
+        request.Content = new FormUrlEncodedContent([]);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
     [Fact]
     public void Controller_AdminOnlyPolicySiniTasir()
     {
@@ -51,6 +71,19 @@ public sealed class UsersControllerTests : IClassFixture<TestWebApplicationFacto
 
         Assert.NotNull(authorizeAttribute);
         Assert.Equal(AuthorizationPolicies.AdminOnly, authorizeAttribute.Policy);
+
+        foreach (var actionName in new[] { "Create", "Edit" })
+        {
+            var postMethod = controllerType
+                .GetMethods()
+                .Single(
+                    method =>
+                        method.Name == actionName &&
+                        method.GetCustomAttribute<HttpPostAttribute>() is not null);
+
+            Assert.NotNull(
+                postMethod.GetCustomAttribute<ValidateAntiForgeryTokenAttribute>());
+        }
     }
 
     private HttpClient CreateClient()
