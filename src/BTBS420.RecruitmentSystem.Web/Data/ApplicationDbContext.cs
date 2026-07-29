@@ -21,6 +21,8 @@ public sealed class ApplicationDbContext(
 
     public DbSet<Position> Positions => Set<Position>();
 
+    public DbSet<JobPosting> JobPostings => Set<JobPosting>();
+
     public DbSet<Skill> Skills => Set<Skill>();
 
     public DbSet<Education> Educations => Set<Education>();
@@ -87,6 +89,7 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new JobFamilyConfiguration());
         builder.ApplyConfiguration(new SeniorityConfiguration());
         builder.ApplyConfiguration(new PositionConfiguration());
+        builder.ApplyConfiguration(new JobPostingConfiguration());
         builder.ApplyConfiguration(new SkillConfiguration());
         builder.ApplyConfiguration(new EducationConfiguration());
         builder.ApplyConfiguration(new LanguageConfiguration());
