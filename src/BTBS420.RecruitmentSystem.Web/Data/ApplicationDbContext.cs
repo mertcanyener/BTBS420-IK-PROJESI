@@ -13,6 +13,8 @@ public sealed class ApplicationDbContext(
 
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    public DbSet<Department> Departments => Set<Department>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -58,6 +60,7 @@ public sealed class ApplicationDbContext(
 
         builder.ApplyConfiguration(new ActivityLogConfiguration());
         builder.ApplyConfiguration(new NotificationConfiguration());
+        builder.ApplyConfiguration(new DepartmentConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()
