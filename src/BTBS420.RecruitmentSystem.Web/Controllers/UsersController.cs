@@ -21,6 +21,8 @@ public sealed class UsersController(
     internal const string GeneratedTemporaryPasswordTempDataKey =
         "GeneratedTemporaryPassword";
 
+    internal const string UserActionErrorTempDataKey = "UserActionError";
+
     private const string DuplicateUserMessage =
         "Bu kullanıcı adı veya e-posta zaten kullanılıyor.";
 
@@ -29,6 +31,9 @@ public sealed class UsersController(
 
     private const string InvalidDepartmentMessage =
         "Seçilen departman geçersiz veya pasif.";
+
+    private const string LastActiveAdminMessage =
+        "Sistemdeki son aktif Admin pasifleştirilemez veya rolü değiştirilemez.";
 
     private static readonly IReadOnlyList<string> InternalRoles =
     [
@@ -349,6 +354,14 @@ public sealed class UsersController(
             return await ReturnEditViewWithOptionsAsync(model, user.Department, cancellationToken);
         }
 
+        if (!string.Equals(model.Role, SystemRoles.Admin, StringComparison.Ordinal) &&
+            await IsLastActiveAdminAsync(user, cancellationToken))
+        {
+            ModelState.AddModelError(string.Empty, LastActiveAdminMessage);
+            model.Id = user.Id;
+            return await ReturnEditViewWithOptionsAsync(model, user.Department, cancellationToken);
+        }
+
         await using var transaction =
             await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -427,6 +440,101 @@ public sealed class UsersController(
         await transaction.CommitAsync(cancellationToken);
 
         return RedirectToAction(nameof(Details), new { id = user.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Deactivate(string id, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.FindAsync([id], cancellationToken);
+
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+        if (!roles.Any(InternalRoles.Contains))
+        {
+            return NotFound();
+        }
+
+        if (await IsLastActiveAdminAsync(user, cancellationToken))
+        {
+            TempData[UserActionErrorTempDataKey] = LastActiveAdminMessage;
+            return RedirectToAction(nameof(Details), new { id = user.Id });
+        }
+
+        user.IsActive = false;
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Kullanıcı pasife alındı.",
+                ActivityEntityTypes.User,
+                user.Id));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return RedirectToAction(nameof(Details), new { id = user.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Activate(string id, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.FindAsync([id], cancellationToken);
+
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+        if (!roles.Any(InternalRoles.Contains))
+        {
+            return NotFound();
+        }
+
+        user.IsActive = true;
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Kullanıcı aktifleştirildi.",
+                ActivityEntityTypes.User,
+                user.Id));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return RedirectToAction(nameof(Details), new { id = user.Id });
+    }
+
+    private async Task<bool> IsLastActiveAdminAsync(
+        ApplicationUser user,
+        CancellationToken cancellationToken)
+    {
+        if (!user.IsActive)
+        {
+            return false;
+        }
+
+        if (!await userManager.IsInRoleAsync(user, SystemRoles.Admin))
+        {
+            return false;
+        }
+
+        var adminRoleId = await dbContext.Roles
+            .Where(role => role.Name == SystemRoles.Admin)
+            .Select(role => role.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var activeAdminCount = await (
+                from userRole in dbContext.UserRoles
+                join adminUser in dbContext.Users on userRole.UserId equals adminUser.Id
+                where userRole.RoleId == adminRoleId && adminUser.IsActive
+                select adminUser.Id)
+            .CountAsync(cancellationToken);
+
+        return activeAdminCount <= 1;
     }
 
     private async Task<IActionResult> ReturnCreateViewWithOptionsAsync(

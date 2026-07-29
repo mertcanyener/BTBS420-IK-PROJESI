@@ -1,7 +1,12 @@
 @model BTBS420.RecruitmentSystem.Web.ViewModels.Users.UserDetailsViewModel
+@using BTBS420.RecruitmentSystem.Web.Authorization
 
 @{
     ViewData["Title"] = "Kullanıcı Detayı";
+    var isInternalUser =
+        Model.Roles.Contains(SystemRoles.Admin) ||
+        Model.Roles.Contains(SystemRoles.RecruitmentSpecialist) ||
+        Model.Roles.Contains(SystemRoles.HiringManager);
 }
 
 <h1 class="h2 mb-4">Kullanıcı Detayı</h1>
@@ -12,6 +17,11 @@
         <strong>Geçici şifre:</strong> <code>@temporaryPassword</code>
         <div class="small mt-1">Bu şifre yalnızca bir kez gösterilir, kullanıcıya güvenli bir şekilde iletin.</div>
     </div>
+}
+
+@if (TempData[BTBS420.RecruitmentSystem.Web.Controllers.UsersController.UserActionErrorTempDataKey] is string userActionError)
+{
+    <div class="alert alert-danger">@userActionError</div>
 }
 
 <div class="card border-0 shadow-sm">
@@ -56,4 +66,20 @@
 <div class="mt-3">
     <a class="btn btn-outline-secondary" asp-controller="Users" asp-action="Index">Listeye Dön</a>
     <a class="btn btn-primary" asp-controller="Users" asp-action="Edit" asp-route-id="@Model.Id">Düzenle</a>
+
+    @if (isInternalUser)
+    {
+        if (Model.IsActive)
+        {
+            <form asp-controller="Users" asp-action="Deactivate" asp-route-id="@Model.Id" method="post" class="d-inline">
+                <button type="submit" class="btn btn-outline-danger">Pasifleştir</button>
+            </form>
+        }
+        else
+        {
+            <form asp-controller="Users" asp-action="Activate" asp-route-id="@Model.Id" method="post" class="d-inline">
+                <button type="submit" class="btn btn-outline-success">Aktifleştir</button>
+            </form>
+        }
+    }
 </div>
