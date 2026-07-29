@@ -177,6 +177,7 @@ public sealed class JobPostingsController(
         }
 
         dbContext.JobPostings.Add(jobPosting);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         activityLogService.Stage(
             new ActivityLogEntry(

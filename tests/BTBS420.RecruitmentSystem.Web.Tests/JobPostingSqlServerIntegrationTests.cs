@@ -198,7 +198,7 @@ public sealed class JobPostingSqlServerIntegrationTests :
         var secondBody = await secondResponse.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
-        Assert.Contains("başka biri tarafından güncellendi", secondBody);
+        Assert.Contains("kontrol edip tekrar kaydedin", secondBody);
 
         await using var finalContext = CreateRawContext();
         var jobPosting = await finalContext.JobPostings.SingleAsync(j => j.Id == jobPostingId);
