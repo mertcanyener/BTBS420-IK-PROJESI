@@ -2,6 +2,7 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.PasswordReset;
 using BTBS420.RecruitmentSystem.Web.ViewModels.Account;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -15,6 +16,7 @@ public sealed class AccountController(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
     IActivityLogService activityLogService,
+    IPasswordResetSender passwordResetSender,
     ApplicationDbContext dbContext) : Controller
 {
     private const string InvalidCredentialsMessage =
@@ -33,6 +35,17 @@ public sealed class AccountController(
         "Kaydınız oluşturuldu. Giriş yapabilirsiniz.";
 
     internal const string RegistrationSuccessTempDataKey = "RegistrationSuccessMessage";
+
+    internal const string ForgotPasswordGenericMessage =
+        "E-posta adresiniz sistemde kayıtlıysa parola sıfırlama bağlantısı gönderildi.";
+
+    internal const string ForgotPasswordTempDataKey = "ForgotPasswordMessage";
+
+    private const string ResetPasswordFailedMessage =
+        "Parola sıfırlama işlemi tamamlanamadı. Bağlantı geçersiz veya süresi dolmuş olabilir.";
+
+    internal const string ResetPasswordSuccessMessage =
+        "Parolanız güncellendi. Giriş yapabilirsiniz.";
 
     [HttpGet]
     [AllowAnonymous]
@@ -221,6 +234,145 @@ public sealed class AccountController(
 
         TempData[RegistrationSuccessTempDataKey] = RegistrationSuccessMessage;
         return RedirectToAction(nameof(Login));
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult ForgotPassword()
+    {
+        return View(new ForgotPasswordViewModel());
+    }
+
+    [HttpPost]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(
+        ForgotPasswordViewModel model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await userManager.FindByEmailAsync(model.Email.Trim());
+
+        if (user is not null)
+        {
+            var token = await userManager.GeneratePasswordResetTokenAsync(user);
+            var resetLink = Url.Action(
+                nameof(ResetPassword),
+                "Account",
+                new { email = user.Email, token },
+                Request.Scheme)!;
+
+            await passwordResetSender.SendAsync(user, resetLink, cancellationToken);
+
+            activityLogService.Stage(
+                new ActivityLogEntry(
+                    ActivityActionCodes.PasswordResetRequested,
+                    "Parola sıfırlama bağlantısı gönderildi.",
+                    ActivityEntityTypes.User,
+                    user.Id));
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        TempData[ForgotPasswordTempDataKey] = ForgotPasswordGenericMessage;
+        return RedirectToAction(nameof(ForgotPassword));
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult ResetPassword(string? email = null, string? token = null)
+    {
+        return View(
+            new ResetPasswordViewModel
+            {
+                Email = email ?? string.Empty,
+                Token = token ?? string.Empty
+            });
+    }
+
+    [HttpPost]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(
+        ResetPasswordViewModel model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ClearPasswordsAndReturnView(model);
+        }
+
+        var user = await userManager.FindByEmailAsync(model.Email.Trim());
+
+        if (user is null)
+        {
+            ModelState.AddModelError(string.Empty, ResetPasswordFailedMessage);
+            return ClearPasswordsAndReturnView(model);
+        }
+
+        await using var transaction =
+            await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        IdentityResult resetResult;
+        try
+        {
+            resetResult = await userManager.ResetPasswordAsync(
+                user,
+                model.Token,
+                model.Password);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            ModelState.AddModelError(string.Empty, ResetPasswordFailedMessage);
+            return ClearPasswordsAndReturnView(model);
+        }
+
+        if (!resetResult.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+
+            if (IsInvalidTokenError(resetResult))
+            {
+                ModelState.AddModelError(string.Empty, ResetPasswordFailedMessage);
+            }
+            else
+            {
+                foreach (var error in resetResult.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+            }
+
+            return ClearPasswordsAndReturnView(model);
+        }
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.PasswordResetSucceeded,
+                "Parola sıfırlandı.",
+                ActivityEntityTypes.User,
+                user.Id));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        TempData[RegistrationSuccessTempDataKey] = ResetPasswordSuccessMessage;
+        return RedirectToAction(nameof(Login));
+    }
+
+    private static bool IsInvalidTokenError(IdentityResult result)
+    {
+        return result.Errors.Any(error => error.Code == "InvalidToken");
+    }
+
+    private IActionResult ClearPasswordsAndReturnView(ResetPasswordViewModel model)
+    {
+        model.Password = string.Empty;
+        model.ConfirmPassword = string.Empty;
+        return View(model);
     }
 
     private static bool IsDuplicateError(IdentityResult result)
