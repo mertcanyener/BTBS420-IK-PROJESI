@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BTBS420.RecruitmentSystem.Web.Controllers;
 
-[Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+[Authorize(
+    Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist},{SystemRoles.HiringManager}")]
 public sealed class JobPostingsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
@@ -32,29 +33,115 @@ public sealed class JobPostingsController(
         "Değişiklikler gösterildi, lütfen kontrol edip tekrar kaydedin.";
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(
+        string? status,
+        DateOnly? deadlineFrom,
+        DateOnly? deadlineTo,
+        CancellationToken cancellationToken)
     {
-        var jobPostings = await dbContext.JobPostings
+        var query = dbContext.JobPostings.AsQueryable();
+
+        if (!User.IsInRole(SystemRoles.Admin))
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser is null)
+            {
+                return Forbid();
+            }
+
+            if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
+            {
+                query = query.Where(jobPosting => jobPosting.ResponsibleUserId == currentUser.Id);
+            }
+            else if (User.IsInRole(SystemRoles.HiringManager))
+            {
+                query = currentUser.DepartmentId is null
+                    ? query.Where(jobPosting => false)
+                    : query.Where(
+                        jobPosting => jobPosting.Position.DepartmentId == currentUser.DepartmentId.Value);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && JobPostingStatuses.IsDefined(status))
+        {
+            query = query.Where(jobPosting => jobPosting.Status == status);
+        }
+
+        if (deadlineFrom.HasValue)
+        {
+            query = query.Where(jobPosting => jobPosting.ApplicationDeadline >= deadlineFrom.Value);
+        }
+
+        if (deadlineTo.HasValue)
+        {
+            query = query.Where(jobPosting => jobPosting.ApplicationDeadline <= deadlineTo.Value);
+        }
+
+        var jobPostings = await query
             .OrderBy(jobPosting => jobPosting.Title)
             .Select(
                 jobPosting => new JobPostingListItemViewModel(
                     jobPosting.Id,
                     jobPosting.Title,
                     jobPosting.Position.Name,
+                    jobPosting.Position.Department.Name,
                     jobPosting.ResponsibleUser.UserName!,
                     jobPosting.ApplicationDeadline,
                     jobPosting.Status))
             .ToListAsync(cancellationToken);
 
-        return View(new JobPostingIndexViewModel(jobPostings));
+        return View(
+            new JobPostingIndexViewModel(
+                jobPostings,
+                JobPostingStatuses.All.ToList(),
+                status,
+                deadlineFrom,
+                deadlineTo));
     }
 
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
+    {
+        var jobPosting = await dbContext.JobPostings
+            .Include(entity => entity.Position)
+            .ThenInclude(position => position.Department)
+            .Include(entity => entity.ResponsibleUser)
+            .FirstOrDefaultAsync(entity => entity.Id == id, cancellationToken);
+
+        if (jobPosting is null)
+        {
+            return NotFound();
+        }
+
+        if (!User.IsInRole(SystemRoles.Admin))
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser is null || !IsWithinScope(jobPosting, currentUser))
+            {
+                return NotFound();
+            }
+        }
+
+        return View(
+            new JobPostingDetailViewModel(
+                jobPosting.Id,
+                jobPosting.Title,
+                jobPosting.Description,
+                jobPosting.Position.Name,
+                jobPosting.Position.Department.Name,
+                jobPosting.ResponsibleUser.UserName!,
+                jobPosting.ApplicationDeadline,
+                jobPosting.Status));
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpGet]
     public async Task<IActionResult> Create(CancellationToken cancellationToken)
     {
         return View(await BuildFormWithOptionsAsync(new JobPostingFormViewModel(), cancellationToken));
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
@@ -102,6 +189,7 @@ public sealed class JobPostingsController(
         return RedirectToAction(nameof(Index));
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpGet]
     public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
@@ -126,6 +214,7 @@ public sealed class JobPostingsController(
         return View(await BuildFormWithOptionsAsync(model, cancellationToken));
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(
@@ -196,6 +285,22 @@ public sealed class JobPostingsController(
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    private bool IsWithinScope(JobPosting jobPosting, ApplicationUser currentUser)
+    {
+        if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
+        {
+            return jobPosting.ResponsibleUserId == currentUser.Id;
+        }
+
+        if (User.IsInRole(SystemRoles.HiringManager))
+        {
+            return currentUser.DepartmentId is not null &&
+                jobPosting.Position.DepartmentId == currentUser.DepartmentId.Value;
+        }
+
+        return false;
     }
 
     private async Task<bool> ValidateAssociationsAsync(

@@ -46,9 +46,9 @@ public sealed class JobPostingsControllerTests : IClassFixture<TestWebApplicatio
     }
 
     [Theory]
-    [InlineData("GET", "/JobPostings")]
     [InlineData("GET", "/JobPostings/Create")]
-    public async Task KorumaliUclar_IseAlimYoneticisiRoluReddeder(string method, string path)
+    [InlineData("GET", "/JobPostings/Edit/1")]
+    public async Task KorumaliUclar_IseAlimYoneticisiRoluMutasyonUclariniReddeder(string method, string path)
     {
         using var client = CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
@@ -75,15 +75,21 @@ public sealed class JobPostingsControllerTests : IClassFixture<TestWebApplicatio
     }
 
     [Fact]
-    public void Controller_AdminVeIseAlimUzmaniRolleriniKabulEder()
+    public void Controller_UcRolunClassSeviyesindeErisimineIzinVerir()
     {
         var controllerType = typeof(JobPostingsController);
         var authorizeAttribute = controllerType.GetCustomAttribute<AuthorizeAttribute>();
 
         Assert.NotNull(authorizeAttribute);
         Assert.Equal(
-            $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}",
+            $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist},{SystemRoles.HiringManager}",
             authorizeAttribute.Roles);
+    }
+
+    [Fact]
+    public void MutasyonAction_AdminVeIseAlimUzmaniIleSinirlanir()
+    {
+        var controllerType = typeof(JobPostingsController);
 
         foreach (var actionName in new[] { "Create", "Edit" })
         {
@@ -96,6 +102,18 @@ public sealed class JobPostingsControllerTests : IClassFixture<TestWebApplicatio
 
             Assert.NotNull(
                 postMethod.GetCustomAttribute<ValidateAntiForgeryTokenAttribute>());
+
+            foreach (var method in controllerType
+                .GetMethods()
+                .Where(candidate => candidate.Name == actionName))
+            {
+                var methodAuthorize = method.GetCustomAttribute<AuthorizeAttribute>();
+
+                Assert.NotNull(methodAuthorize);
+                Assert.Equal(
+                    $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}",
+                    methodAuthorize.Roles);
+            }
         }
     }
 

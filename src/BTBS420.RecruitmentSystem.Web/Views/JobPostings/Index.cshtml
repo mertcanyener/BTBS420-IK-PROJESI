@@ -1,19 +1,48 @@
 @model BTBS420.RecruitmentSystem.Web.ViewModels.JobPostings.JobPostingIndexViewModel
+@using BTBS420.RecruitmentSystem.Web.Authorization
 
 @{
     ViewData["Title"] = "İlanlar";
+    var canManage = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
 }
 
 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
     <h1 class="h2 mb-0">İlanlar</h1>
-    <a class="btn btn-primary" asp-controller="JobPostings" asp-action="Create">Yeni İlan</a>
+    @if (canManage)
+    {
+        <a class="btn btn-primary" asp-controller="JobPostings" asp-action="Create">Yeni İlan</a>
+    }
 </div>
+
+<form asp-controller="JobPostings" asp-action="Index" method="get" class="row g-2 mb-4">
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="status">Durum</label>
+        <select class="form-select" id="status" name="status">
+            <option value="">Tümü</option>
+            @foreach (var statusOption in Model.StatusOptions)
+            {
+                <option value="@statusOption" selected="@(Model.Status == statusOption)">@statusOption</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="deadlineFrom">Son Tarih (Başlangıç)</label>
+        <input type="date" class="form-control" id="deadlineFrom" name="deadlineFrom" value="@Model.DeadlineFrom?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="deadlineTo">Son Tarih (Bitiş)</label>
+        <input type="date" class="form-control" id="deadlineTo" name="deadlineTo" value="@Model.DeadlineTo?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-12 col-md-3 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">Filtrele</button>
+    </div>
+</form>
 
 @if (Model.JobPostings.Count == 0)
 {
     <div class="card border-0 shadow-sm">
         <div class="card-body p-4 text-center">
-            <p class="text-body-secondary mb-0">Henüz ilan eklenmedi.</p>
+            <p class="text-body-secondary mb-0">Filtreye uyan ilan bulunamadı.</p>
         </div>
     </div>
 }
@@ -24,6 +53,7 @@ else
             <tr>
                 <th scope="col">Başlık</th>
                 <th scope="col">Pozisyon</th>
+                <th scope="col">Departman</th>
                 <th scope="col">Sorumlu Uzman</th>
                 <th scope="col">Son Başvuru Tarihi</th>
                 <th scope="col">Durum</th>
@@ -36,11 +66,16 @@ else
                 <tr>
                     <td>@jobPosting.Title</td>
                     <td>@jobPosting.PositionName</td>
+                    <td>@jobPosting.DepartmentName</td>
                     <td>@jobPosting.ResponsibleUserName</td>
                     <td>@jobPosting.ApplicationDeadline.ToString("dd.MM.yyyy")</td>
                     <td><span class="badge text-bg-secondary">@jobPosting.Status</span></td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" asp-controller="JobPostings" asp-action="Edit" asp-route-id="@jobPosting.Id">Düzenle</a>
+                        <a class="btn btn-sm btn-outline-secondary" asp-controller="JobPostings" asp-action="Details" asp-route-id="@jobPosting.Id">Detay</a>
+                        @if (canManage)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-controller="JobPostings" asp-action="Edit" asp-route-id="@jobPosting.Id">Düzenle</a>
+                        }
                     </td>
                 </tr>
             }
