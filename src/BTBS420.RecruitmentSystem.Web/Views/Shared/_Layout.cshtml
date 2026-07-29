@@ -29,6 +29,12 @@
                         </li>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
+                            @if (User.IsInRole("Admin") || User.IsInRole("İşe Alım Uzmanı") || User.IsInRole("İşe Alım Yöneticisi"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="JobPostings" asp-action="Index">İlanlar</a>
+                                </li>
+                            }
                             @if (User.IsInRole("Admin"))
                             {
                                 <li class="nav-item dropdown">
