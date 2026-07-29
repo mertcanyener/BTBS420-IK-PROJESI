@@ -311,6 +311,7 @@ namespace BTBS420.RecruitmentSystem.Web.Data.Migrations
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
+                        .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
