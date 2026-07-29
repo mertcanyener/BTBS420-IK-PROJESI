@@ -302,6 +302,156 @@ public sealed class JobPostingSqlServerIntegrationTests :
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_GecerliDurumGecisiYayinlarVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan43-Dept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan43-Pos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var title = $"Kan43-JP-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        var response = await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);
+        Assert.Equal(JobPostingStatuses.Published, jobPosting.Status);
+
+        var log = await context.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.EntityStatusChanged &&
+                    l.TargetEntityType == ActivityEntityTypes.JobPosting &&
+                    l.TargetEntityId == jobPosting.Id.ToString())
+            .FirstOrDefaultAsync();
+        Assert.NotNull(log);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_TanimsizDurumGecisiReddedilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan43-InvalidDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan43-InvalidPos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var title = $"Kan43-JP-Invalid-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        var response = await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.ApplicationsClosed,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);
+        Assert.Equal(JobPostingStatuses.Draft, jobPosting.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_SorumluOlmayanUzmanDurumDegistiremez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan43-ScopeDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan43-ScopePos-{runId}");
+        var ownerRecruiterId = await CreateRecruiterAsync(factory, departmentId, $"owner-{runId}");
+        var otherRecruiterId = await CreateRecruiterAsync(factory, departmentId, $"other-{runId}");
+        var title = $"Kan43-JP-Scope-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, ownerRecruiterId, title);
+
+        using var client = CreateClient(factory);
+        var response = await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.RecruitmentSpecialist,
+            otherRecruiterId);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);
+        Assert.Equal(JobPostingStatuses.Draft, jobPosting.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_YoneticiDurumDegistiremez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan43-ManagerDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan43-ManagerPos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var managerId = await CreateHiringManagerAsync(factory, departmentId, runId);
+        var title = $"Kan43-JP-Manager-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        var response = await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.HiringManager,
+            managerId);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);
+        Assert.Equal(JobPostingStatuses.Draft, jobPosting.Status);
+    }
+
+    private static async Task<HttpResponseMessage> PostChangeStatusAsync(
+        HttpClient client,
+        int jobPostingId,
+        string newStatus,
+        string role,
+        string userId)
+    {
+        string token;
+        using (var tokenRequest = new HttpRequestMessage(HttpMethod.Get, "/JobPostings/Create"))
+        {
+            tokenRequest.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+            tokenRequest.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+            var tokenResponse = await client.SendAsync(tokenRequest);
+            var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
+            var tokenMatch = Regex.Match(
+                tokenContent,
+                "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"",
+                RegexOptions.CultureInvariant);
+            token = tokenMatch.Success ? WebUtility.HtmlDecode(tokenMatch.Groups[1].Value) : string.Empty;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/JobPostings/ChangeStatus");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["id"] = jobPostingId.ToString(),
+                ["newStatus"] = newStatus,
+                ["__RequestVerificationToken"] = token
+            });
+
+        return await client.SendAsync(request);
+    }
+
     private static async Task<int> CreateJobPostingAsync(
         WebApplicationFactory<Program> factory,
         int positionId,

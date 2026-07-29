@@ -1,9 +1,11 @@
 @model BTBS420.RecruitmentSystem.Web.ViewModels.JobPostings.JobPostingDetailViewModel
 @using BTBS420.RecruitmentSystem.Web.Authorization
+@using BTBS420.RecruitmentSystem.Web.Models
 
 @{
     ViewData["Title"] = "İlan Detayı";
     var canManage = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+    var allowedNextStatuses = JobPostingStatuses.GetAllowedNextStatuses(Model.Status);
 }
 
 <h1 class="h2 mb-4">İlan Detayı</h1>
@@ -40,5 +42,13 @@
     @if (canManage)
     {
         <a class="btn btn-primary" asp-controller="JobPostings" asp-action="Edit" asp-route-id="@Model.Id">Düzenle</a>
+        @foreach (var nextStatus in allowedNextStatuses)
+        {
+            <form asp-controller="JobPostings" asp-action="ChangeStatus" method="post" class="d-inline">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="newStatus" value="@nextStatus" />
+                <button type="submit" class="btn btn-outline-primary">Durumu değiştir: @nextStatus</button>
+            </form>
+        }
     }
 </div>

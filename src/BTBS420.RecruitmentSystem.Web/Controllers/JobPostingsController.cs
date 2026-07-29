@@ -32,6 +32,9 @@ public sealed class JobPostingsController(
         "Bu ilan siz düzenlerken başka biri tarafından güncellendi. " +
         "Değişiklikler gösterildi, lütfen kontrol edip tekrar kaydedin.";
 
+    private const string InvalidStatusTransitionMessage =
+        "Bu durum geçişi tanımlı değil.";
+
     [HttpGet]
     public async Task<IActionResult> Index(
         string? status,
@@ -286,6 +289,51 @@ public sealed class JobPostingsController(
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangeStatus(
+        int id,
+        string newStatus,
+        CancellationToken cancellationToken)
+    {
+        var jobPosting = await dbContext.JobPostings.FindAsync([id], cancellationToken);
+
+        if (jobPosting is null)
+        {
+            return NotFound();
+        }
+
+        if (!User.IsInRole(SystemRoles.Admin))
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser is null || jobPosting.ResponsibleUserId != currentUser.Id)
+            {
+                return Forbid();
+            }
+        }
+
+        if (!JobPostingStatuses.IsDefined(newStatus) ||
+            !JobPostingStatuses.IsValidTransition(jobPosting.Status, newStatus))
+        {
+            return BadRequest(InvalidStatusTransitionMessage);
+        }
+
+        var previousStatus = jobPosting.Status;
+        jobPosting.ChangeStatus(newStatus);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                $"İlan durumu '{previousStatus}' değerinden '{newStatus}' değerine değiştirildi.",
+                ActivityEntityTypes.JobPosting,
+                jobPosting.Id.ToString()));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     private bool IsWithinScope(JobPosting jobPosting, ApplicationUser currentUser)

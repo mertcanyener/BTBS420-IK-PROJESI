@@ -45,6 +45,17 @@ public sealed class JobPosting
 
     public byte[] RowVersion { get; private set; } = [];
 
+    internal void ChangeStatus(string newStatus)
+    {
+        if (!JobPostingStatuses.IsValidTransition(Status, newStatus))
+        {
+            throw new InvalidOperationException(
+                $"İlan '{Status}' durumundan '{newStatus}' durumuna geçemez.");
+        }
+
+        Status = newStatus;
+    }
+
     internal void Edit(
         string title,
         string description,
