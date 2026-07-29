@@ -15,6 +15,12 @@ public sealed class ApplicationDbContext(
 
     public DbSet<Department> Departments => Set<Department>();
 
+    public DbSet<JobFamily> JobFamilies => Set<JobFamily>();
+
+    public DbSet<Seniority> Seniorities => Set<Seniority>();
+
+    public DbSet<Position> Positions => Set<Position>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -61,6 +67,9 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new ActivityLogConfiguration());
         builder.ApplyConfiguration(new NotificationConfiguration());
         builder.ApplyConfiguration(new DepartmentConfiguration());
+        builder.ApplyConfiguration(new JobFamilyConfiguration());
+        builder.ApplyConfiguration(new SeniorityConfiguration());
+        builder.ApplyConfiguration(new PositionConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()

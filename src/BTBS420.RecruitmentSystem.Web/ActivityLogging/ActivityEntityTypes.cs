@@ -8,6 +8,8 @@ public static class ActivityEntityTypes
     public const string User = "user";
     public const string Role = "role";
     public const string Department = "department";
+    public const string JobFamily = "job-family";
+    public const string Seniority = "seniority";
     public const string Position = "position";
     public const string JobPosting = "job-posting";
     public const string Candidate = "candidate";
@@ -23,6 +25,8 @@ public static class ActivityEntityTypes
             User,
             Role,
             Department,
+            JobFamily,
+            Seniority,
             Position,
             JobPosting,
             Candidate,

@@ -1,0 +1,29 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.JobFamilies.JobFamilyFormViewModel
+
+@{
+    ViewData["Title"] = "İş Ailesini Düzenle";
+}
+
+<h1 class="h3 mb-4">İş Ailesini Düzenle</h1>
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-controller="JobFamilies" asp-action="Edit" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" novalidate>
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a class="btn btn-outline-secondary" asp-controller="JobFamilies" asp-action="Index">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

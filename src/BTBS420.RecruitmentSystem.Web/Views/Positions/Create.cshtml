@@ -1,0 +1,64 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Positions.PositionFormViewModel
+
+@{
+    ViewData["Title"] = "Yeni Pozisyon";
+}
+
+<h1 class="h3 mb-4">Yeni Pozisyon</h1>
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-controller="Positions" asp-action="Create" method="post" asp-antiforgery="true" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="DepartmentId" class="form-label"></label>
+                <select asp-for="DepartmentId" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.DepartmentOptions)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="DepartmentId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="JobFamilyId" class="form-label"></label>
+                <select asp-for="JobFamilyId" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.JobFamilyOptions)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="JobFamilyId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="SeniorityId" class="form-label"></label>
+                <select asp-for="SeniorityId" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.SeniorityOptions)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="SeniorityId" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Oluştur</button>
+            <a class="btn btn-outline-secondary" asp-controller="Positions" asp-action="Index">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

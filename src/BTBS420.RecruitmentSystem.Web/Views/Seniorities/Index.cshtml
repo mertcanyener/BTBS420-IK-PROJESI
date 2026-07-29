@@ -1,0 +1,66 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Seniorities.SeniorityIndexViewModel
+
+@{
+    ViewData["Title"] = "Kıdemler";
+}
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <h1 class="h2 mb-0">Kıdemler</h1>
+    <a class="btn btn-primary" asp-controller="Seniorities" asp-action="Create">Yeni Kıdem</a>
+</div>
+
+@if (Model.Seniorities.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Henüz kıdem eklenmedi.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Sıra</th>
+                <th scope="col">Ad</th>
+                <th scope="col">Durum</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var seniority in Model.Seniorities)
+            {
+                <tr>
+                    <td>@seniority.Rank</td>
+                    <td>@seniority.Name</td>
+                    <td>
+                        @if (seniority.IsActive)
+                        {
+                            <span class="badge text-bg-success">Aktif</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">Pasif</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="Seniorities" asp-action="Edit" asp-route-id="@seniority.Id">Düzenle</a>
+                        @if (seniority.IsActive)
+                        {
+                            <form asp-controller="Seniorities" asp-action="Deactivate" asp-route-id="@seniority.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">Pasife Al</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-controller="Seniorities" asp-action="Activate" asp-route-id="@seniority.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-success">Aktifleştir</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
