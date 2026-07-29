@@ -7,6 +7,7 @@ using BTBS420.RecruitmentSystem.Web.ViewModels.Positions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BTBS420.RecruitmentSystem.Web.Controllers;
@@ -25,6 +26,9 @@ public sealed class CandidateProfileController(
 
     private const string InvalidLanguageSelectionMessage =
         "Seçilen dillerden biri veya birkaçı aktif değil ya da bulunamadı.";
+
+    private const string DuplicateProfileMessage =
+        "Bu kullanıcı için zaten bir profil kaydı mevcut.";
 
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -96,7 +100,15 @@ public sealed class CandidateProfileController(
             return View(await BuildFormWithOptionsAsync(model, cancellationToken));
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        {
+            ModelState.AddModelError(string.Empty, DuplicateProfileMessage);
+            return View(await BuildFormWithOptionsAsync(model, cancellationToken));
+        }
 
         await SyncSkillsAsync(profile.Id, model.SelectedSkillIds, cancellationToken);
         await SyncLanguagesAsync(profile.Id, model.SelectedLanguageIds, cancellationToken);
@@ -268,5 +280,11 @@ public sealed class CandidateProfileController(
             .ToListAsync(cancellationToken);
 
         return model;
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is SqlException sqlException &&
+            sqlException.Number is 2601 or 2627;
     }
 }

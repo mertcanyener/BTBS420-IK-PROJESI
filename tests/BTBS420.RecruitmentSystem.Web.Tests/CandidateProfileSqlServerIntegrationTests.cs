@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
+using BTBS420.RecruitmentSystem.Web.Models;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -30,6 +31,7 @@ public sealed class CandidateProfileSqlServerIntegrationTests :
         var skillId = await CreateSkillAsync(factory, $"Kan45-Skill-{runId}");
         var languageId = await CreateLanguageAsync(factory, $"Kan45-Lang-{runId}");
         var candidateId = $"kan45-candidate-{runId}";
+        await CreateCandidateUserAsync(candidateId);
         using var client = CreateClient(factory);
 
         var response = await PostAsync(
@@ -78,6 +80,7 @@ public sealed class CandidateProfileSqlServerIntegrationTests :
         var runId = Guid.NewGuid().ToString("N");
         var skillId = await CreateSkillAsync(factory, $"Kan45-DupSkill-{runId}");
         var candidateId = $"kan45-dup-candidate-{runId}";
+        await CreateCandidateUserAsync(candidateId);
         using var client = CreateClient(factory);
         var token = await GetAntiforgeryTokenAsync(client, candidateId);
 
@@ -113,6 +116,7 @@ public sealed class CandidateProfileSqlServerIntegrationTests :
         var runId = Guid.NewGuid().ToString("N");
         var candidateAId = $"kan45-a-{runId}";
         var candidateBId = $"kan45-b-{runId}";
+        await CreateCandidateUserAsync(candidateAId);
         using var client = CreateClient(factory);
 
         await PostAsync(
@@ -147,6 +151,7 @@ public sealed class CandidateProfileSqlServerIntegrationTests :
         using var factory = CreateSqlFactory();
         var runId = Guid.NewGuid().ToString("N");
         var candidateId = $"kan45-update-{runId}";
+        await CreateCandidateUserAsync(candidateId);
         using var client = CreateClient(factory);
 
         await PostAsync(
@@ -177,6 +182,21 @@ public sealed class CandidateProfileSqlServerIntegrationTests :
         var profile = await context.CandidateProfiles
             .SingleAsync(p => p.ApplicationUserId == candidateId);
         Assert.Equal("Güncel", profile.FirstName);
+    }
+
+    private static async Task CreateCandidateUserAsync(string candidateId)
+    {
+        await using var context = CreateRawContext();
+        context.Users.Add(
+            new ApplicationUser
+            {
+                Id = candidateId,
+                UserName = candidateId,
+                NormalizedUserName = candidateId.ToUpperInvariant(),
+                Email = $"{candidateId}@example.test",
+                NormalizedEmail = $"{candidateId}@example.test".ToUpperInvariant()
+            });
+        await context.SaveChangesAsync();
     }
 
     private static async Task<int> CreateSkillAsync(
