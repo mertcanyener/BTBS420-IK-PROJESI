@@ -417,6 +417,161 @@ public sealed class JobPostingSqlServerIntegrationTests :
         Assert.Equal(JobPostingStatuses.Draft, jobPosting.Status);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_TaslakIlanFizikselOlarakSilinir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan44-DeleteDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan44-DeletePos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var title = $"Kan44-JP-Delete-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        var response = await PostDeleteAsync(
+            client,
+            jobPostingId,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var exists = await context.JobPostings.AnyAsync(j => j.Id == jobPostingId);
+        Assert.False(exists);
+
+        var log = await context.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.EntityDeleted &&
+                    l.TargetEntityType == ActivityEntityTypes.JobPosting &&
+                    l.TargetEntityId == jobPostingId.ToString())
+            .FirstOrDefaultAsync();
+        Assert.NotNull(log);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_YayinlanmisIlanSilinemez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan44-NoDeleteDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan44-NoDeletePos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var title = $"Kan44-JP-NoDelete-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        var response = await PostDeleteAsync(
+            client,
+            jobPostingId,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var exists = await context.JobPostings.AnyAsync(j => j.Id == jobPostingId);
+        Assert.True(exists);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task JobPosting_ArsivlenmisIlandanBaskaDurumaGecisYapilamaz()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(factory, $"Kan44-ArchiveDept-{runId}");
+        var positionId = await CreatePositionAsync(factory, departmentId, $"Kan44-ArchivePos-{runId}");
+        var recruiterId = await CreateRecruiterAsync(factory, departmentId, runId);
+        var title = $"Kan44-JP-Archive-{runId}";
+        var jobPostingId = await CreateJobPostingAsync(factory, positionId, recruiterId, title);
+
+        using var client = CreateClient(factory);
+        await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+        var archiveResponse = await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Archived,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        Assert.Equal(HttpStatusCode.Redirect, archiveResponse.StatusCode);
+
+        await using (var context = CreateRawContext())
+        {
+            var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);
+            Assert.Equal(JobPostingStatuses.Archived, jobPosting.Status);
+
+            var log = await context.ActivityLogs
+                .Where(
+                    l =>
+                        l.ActionCode == ActivityActionCodes.EntityArchived &&
+                        l.TargetEntityType == ActivityEntityTypes.JobPosting &&
+                        l.TargetEntityId == jobPostingId.ToString())
+                .FirstOrDefaultAsync();
+            Assert.NotNull(log);
+        }
+
+        var reopenResponse = await PostChangeStatusAsync(
+            client,
+            jobPostingId,
+            JobPostingStatuses.Published,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId);
+
+        Assert.Equal(HttpStatusCode.BadRequest, reopenResponse.StatusCode);
+
+        await using var finalContext = CreateRawContext();
+        var finalJobPosting = await finalContext.JobPostings.SingleAsync(j => j.Id == jobPostingId);
+        Assert.Equal(JobPostingStatuses.Archived, finalJobPosting.Status);
+    }
+
+    private static async Task<HttpResponseMessage> PostDeleteAsync(
+        HttpClient client,
+        int jobPostingId,
+        string role,
+        string userId)
+    {
+        string token;
+        using (var tokenRequest = new HttpRequestMessage(HttpMethod.Get, "/JobPostings/Create"))
+        {
+            tokenRequest.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+            tokenRequest.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+            var tokenResponse = await client.SendAsync(tokenRequest);
+            var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
+            var tokenMatch = Regex.Match(
+                tokenContent,
+                "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"",
+                RegexOptions.CultureInvariant);
+            token = tokenMatch.Success ? WebUtility.HtmlDecode(tokenMatch.Groups[1].Value) : string.Empty;
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/JobPostings/Delete");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["id"] = jobPostingId.ToString(),
+                ["__RequestVerificationToken"] = token
+            });
+
+        return await client.SendAsync(request);
+    }
+
     private static async Task<HttpResponseMessage> PostChangeStatusAsync(
         HttpClient client,
         int jobPostingId,

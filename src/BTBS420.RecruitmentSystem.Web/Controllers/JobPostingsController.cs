@@ -35,6 +35,10 @@ public sealed class JobPostingsController(
     private const string InvalidStatusTransitionMessage =
         "Bu durum geçişi tanımlı değil.";
 
+    private const string DeleteNotAllowedMessage =
+        "Yalnızca Taslak durumundaki ilanlar silinebilir. Yayımlanmış bir ilanı " +
+        "kaldırmak için arşivleyin.";
+
     [HttpGet]
     public async Task<IActionResult> Index(
         string? status,
@@ -325,15 +329,58 @@ public sealed class JobPostingsController(
         jobPosting.ChangeStatus(newStatus);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        var actionCode = newStatus == JobPostingStatuses.Archived
+            ? ActivityActionCodes.EntityArchived
+            : ActivityActionCodes.EntityStatusChanged;
         activityLogService.Stage(
             new ActivityLogEntry(
-                ActivityActionCodes.EntityStatusChanged,
+                actionCode,
                 $"İlan durumu '{previousStatus}' değerinden '{newStatus}' değerine değiştirildi.",
                 ActivityEntityTypes.JobPosting,
                 jobPosting.Id.ToString()));
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    {
+        var jobPosting = await dbContext.JobPostings.FindAsync([id], cancellationToken);
+
+        if (jobPosting is null)
+        {
+            return NotFound();
+        }
+
+        if (!User.IsInRole(SystemRoles.Admin))
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser is null || jobPosting.ResponsibleUserId != currentUser.Id)
+            {
+                return Forbid();
+            }
+        }
+
+        if (jobPosting.Status != JobPostingStatuses.Draft)
+        {
+            return BadRequest(DeleteNotAllowedMessage);
+        }
+
+        dbContext.JobPostings.Remove(jobPosting);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityDeleted,
+                "Taslak ilan kalıcı olarak silindi.",
+                ActivityEntityTypes.JobPosting,
+                id.ToString()));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return RedirectToAction(nameof(Index));
     }
 
     private bool IsWithinScope(JobPosting jobPosting, ApplicationUser currentUser)

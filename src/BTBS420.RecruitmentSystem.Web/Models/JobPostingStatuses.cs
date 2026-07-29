@@ -8,20 +8,22 @@ public static class JobPostingStatuses
     public const string Published = "published";
     public const string ApplicationsClosed = "applications-closed";
     public const string PositionFilled = "position-filled";
+    public const string Archived = "archived";
 
     private static readonly FrozenSet<string> DefinedStatuses =
-        new[] { Draft, Published, ApplicationsClosed, PositionFilled }
+        new[] { Draft, Published, ApplicationsClosed, PositionFilled, Archived }
             .ToFrozenSet(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, FrozenSet<string>> AllowedTransitions =
         new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
         {
             [Draft] = new[] { Published }.ToFrozenSet(StringComparer.Ordinal),
-            [Published] = new[] { ApplicationsClosed, PositionFilled }
+            [Published] = new[] { ApplicationsClosed, PositionFilled, Archived }
                 .ToFrozenSet(StringComparer.Ordinal),
-            [ApplicationsClosed] = new[] { Published, PositionFilled }
+            [ApplicationsClosed] = new[] { Published, PositionFilled, Archived }
                 .ToFrozenSet(StringComparer.Ordinal),
-            [PositionFilled] = FrozenSet<string>.Empty
+            [PositionFilled] = new[] { Archived }.ToFrozenSet(StringComparer.Ordinal),
+            [Archived] = FrozenSet<string>.Empty
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public static IReadOnlySet<string> All => DefinedStatuses;
