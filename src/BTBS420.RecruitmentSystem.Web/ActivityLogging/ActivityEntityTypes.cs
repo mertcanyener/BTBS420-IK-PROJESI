@@ -18,6 +18,8 @@ public static class ActivityEntityTypes
     public const string ExperienceRange = "experience-range";
     public const string JobPosting = "job-posting";
     public const string Candidate = "candidate";
+    public const string CandidateEducation = "candidate-education";
+    public const string CandidateExperience = "candidate-experience";
     public const string Application = "application";
     public const string Interview = "interview";
     public const string Offer = "offer";
@@ -40,6 +42,8 @@ public static class ActivityEntityTypes
             ExperienceRange,
             JobPosting,
             Candidate,
+            CandidateEducation,
+            CandidateExperience,
             Application,
             Interview,
             Offer,

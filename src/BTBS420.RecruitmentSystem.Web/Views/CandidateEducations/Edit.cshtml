@@ -1,0 +1,64 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateEducations.CandidateEducationFormViewModel
+
+@{
+    ViewData["Title"] = "Eğitimi Düzenle";
+}
+
+<h1 class="h3 mb-4">Eğitimi Düzenle</h1>
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <form asp-controller="CandidateEducations" asp-action="Edit" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" novalidate>
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="EducationId" class="form-label"></label>
+                <select asp-for="EducationId" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.EducationOptions)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="EducationId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="SchoolName" class="form-label"></label>
+                <input asp-for="SchoolName" class="form-control" />
+                <span asp-validation-for="SchoolName" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="FieldOfStudy" class="form-label"></label>
+                <input asp-for="FieldOfStudy" class="form-control" />
+                <span asp-validation-for="FieldOfStudy" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="StartDate" class="form-label"></label>
+                <input asp-for="StartDate" class="form-control" />
+                <span asp-validation-for="StartDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="EndDate" class="form-label"></label>
+                <input asp-for="EndDate" class="form-control" />
+                <span asp-validation-for="EndDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input asp-for="IsOngoing" class="form-check-input" />
+                <label asp-for="IsOngoing" class="form-check-label"></label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a class="btn btn-outline-secondary" asp-controller="CandidateEducations" asp-action="Index">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

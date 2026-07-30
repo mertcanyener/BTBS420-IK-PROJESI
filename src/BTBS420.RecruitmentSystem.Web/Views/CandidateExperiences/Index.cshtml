@@ -1,0 +1,56 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateExperiences.CandidateExperienceIndexViewModel
+
+@{
+    ViewData["Title"] = "İş Deneyimlerim";
+}
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <h1 class="h2 mb-0">İş Deneyimlerim</h1>
+    <a class="btn btn-primary" asp-controller="CandidateExperiences" asp-action="Create">Yeni Deneyim Ekle</a>
+</div>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="status">@statusMessage</div>
+}
+
+@if (Model.Experiences.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Henüz iş deneyimi eklenmedi.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Şirket</th>
+                <th scope="col">Unvan</th>
+                <th scope="col">Tarih Aralığı</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var experience in Model.Experiences)
+            {
+                <tr>
+                    <td>@experience.CompanyName</td>
+                    <td>@experience.JobTitle</td>
+                    <td>
+                        @experience.StartDate.ToString("dd.MM.yyyy") -
+                        @(experience.EndDate.HasValue ? experience.EndDate.Value.ToString("dd.MM.yyyy") : "Devam ediyor")
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="CandidateExperiences" asp-action="Edit" asp-route-id="@experience.Id">Düzenle</a>
+                        <form asp-controller="CandidateExperiences" asp-action="Delete" asp-route-id="@experience.Id" method="post" asp-antiforgery="true" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

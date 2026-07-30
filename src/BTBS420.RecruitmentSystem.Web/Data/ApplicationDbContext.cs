@@ -39,6 +39,10 @@ public sealed class ApplicationDbContext(
 
     public DbSet<CandidateProfileLanguage> CandidateProfileLanguages => Set<CandidateProfileLanguage>();
 
+    public DbSet<CandidateEducation> CandidateEducations => Set<CandidateEducation>();
+
+    public DbSet<CandidateExperience> CandidateExperiences => Set<CandidateExperience>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -104,6 +108,8 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new CandidateProfileConfiguration());
         builder.ApplyConfiguration(new CandidateProfileSkillConfiguration());
         builder.ApplyConfiguration(new CandidateProfileLanguageConfiguration());
+        builder.ApplyConfiguration(new CandidateEducationConfiguration());
+        builder.ApplyConfiguration(new CandidateExperienceConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()
