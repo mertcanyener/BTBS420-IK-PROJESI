@@ -197,6 +197,25 @@
                                 {
                                     <div>Konum: @interview.Location</div>
                                 }
+                                <div>
+                                    Katılımcılar:
+                                    @(interview.ParticipantNames.Count == 0 ? "-" : string.Join(", ", interview.ParticipantNames))
+                                </div>
+                                @if (Model.CanScheduleInterview)
+                                {
+                                    <form asp-controller="ApplicationsPool" asp-action="AssignParticipants" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mt-2">
+                                        <input type="hidden" name="interviewId" value="@interview.Id" />
+                                        <div class="input-group input-group-sm">
+                                            <select name="participantUserIds" class="form-select" multiple size="3">
+                                                @foreach (var option in Model.ParticipantOptions)
+                                                {
+                                                    <option value="@option.Id">@option.Name</option>
+                                                }
+                                            </select>
+                                            <button type="submit" class="btn btn-outline-primary">Katılımcı Ata</button>
+                                        </div>
+                                    </form>
+                                }
                             </li>
                         }
                     </ul>

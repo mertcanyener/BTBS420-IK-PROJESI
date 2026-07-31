@@ -123,6 +123,74 @@ public sealed class ApplicationsPoolControllerTests : IClassFixture<TestWebAppli
             authorizeAttribute.Roles);
     }
 
+    [Fact]
+    public async Task AssignParticipants_YoneticiRolunuReddeder()
+    {
+        using var client = CreateClient();
+
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Get, "/ApplicationsPool");
+        tokenRequest.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.HiringManager);
+        var tokenResponse = await client.SendAsync(tokenRequest);
+        var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
+        var tokenMatch = System.Text.RegularExpressions.Regex.Match(
+            tokenContent,
+            "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"");
+        Assert.True(tokenMatch.Success, "Antiforgery form alanı bulunamadı.");
+        var token = System.Net.WebUtility.HtmlDecode(tokenMatch.Groups[1].Value);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ApplicationsPool/AssignParticipants/1");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.HiringManager);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["interviewId"] = "1",
+                ["__RequestVerificationToken"] = token
+            });
+
+        var response = await client.SendAsync(request);
+
+        // Controller Forbid() döner; bilinen KAN-92 hatası (ErrorController'ın yalnızca GET
+        // kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor.
+        Assert.True(
+            response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.MethodNotAllowed,
+            $"Beklenmeyen durum kodu: {response.StatusCode}");
+    }
+
+    [Fact]
+    public async Task AssignParticipants_AntiforgeryTokenOlmadanReddeder()
+    {
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ApplicationsPool/AssignParticipants/1");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Admin);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["interviewId"] = "1" });
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
+    public void AssignParticipants_YalnizAdminVeUzmanRolleriniKabulEder()
+    {
+        var controllerType = typeof(ApplicationsPoolController);
+        var postMethod = controllerType
+            .GetMethods()
+            .Single(
+                method =>
+                    method.Name == nameof(ApplicationsPoolController.AssignParticipants) &&
+                    method.GetCustomAttribute<Microsoft.AspNetCore.Mvc.HttpPostAttribute>() is not null);
+
+        var authorizeAttribute = postMethod.GetCustomAttribute<AuthorizeAttribute>();
+        Assert.NotNull(authorizeAttribute);
+        Assert.Equal(
+            $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}",
+            authorizeAttribute.Roles);
+
+        Assert.NotNull(
+            postMethod.GetCustomAttribute<Microsoft.AspNetCore.Mvc.ValidateAntiForgeryTokenAttribute>());
+    }
+
     private HttpClient CreateClient()
     {
         return _factory.CreateClient(

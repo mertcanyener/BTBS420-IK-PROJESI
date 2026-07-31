@@ -51,6 +51,8 @@ public sealed class ApplicationDbContext(
 
     public DbSet<Interview> Interviews => Set<Interview>();
 
+    public DbSet<InterviewParticipant> InterviewParticipants => Set<InterviewParticipant>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -122,6 +124,7 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new JobApplicationConfiguration());
         builder.ApplyConfiguration(new ApplicationNoteConfiguration());
         builder.ApplyConfiguration(new InterviewConfiguration());
+        builder.ApplyConfiguration(new InterviewParticipantConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()

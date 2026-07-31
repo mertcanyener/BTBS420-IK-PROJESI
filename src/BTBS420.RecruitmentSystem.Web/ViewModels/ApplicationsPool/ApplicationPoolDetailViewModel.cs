@@ -21,4 +21,5 @@ public sealed record ApplicationPoolDetailViewModel(
     IReadOnlyList<ApplicationNoteViewModel> Notes,
     IReadOnlyList<ApplicationTimelineEntryViewModel> Timeline,
     IReadOnlyList<InterviewSummaryViewModel> Interviews,
-    bool CanScheduleInterview);
+    bool CanScheduleInterview,
+    IReadOnlyList<ParticipantOptionViewModel> ParticipantOptions);

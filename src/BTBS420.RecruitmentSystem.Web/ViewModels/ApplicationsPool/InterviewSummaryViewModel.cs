@@ -7,4 +7,5 @@ public sealed record InterviewSummaryViewModel(
     DateTime EndAtUtc,
     string? OnlineMeetingLink,
     string? Location,
-    string StatusLabel);
+    string StatusLabel,
+    IReadOnlyList<string> ParticipantNames);

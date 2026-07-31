@@ -1,3 +1,4 @@
+using System.Data;
 using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
@@ -7,6 +8,7 @@ using BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BTBS420.RecruitmentSystem.Web.Controllers;
@@ -24,6 +26,22 @@ public sealed class ApplicationsPoolController(
     private const string NoteAddedMessage = "Not eklendi.";
 
     private const string InterviewScheduledMessage = "Mülakat planlandı.";
+
+    private const string ParticipantRequiredMessage = "En az bir katılımcı seçmelisiniz.";
+
+    private const string ParticipantsAlreadyAssignedMessage =
+        "Seçilen katılımcılar zaten bu mülakata atanmış.";
+
+    private const string ParticipantsAssignedMessage = "Katılımcılar atandı.";
+
+    private const string OperationFailedMessage = "İşlem tamamlanamadı, lütfen tekrar deneyin.";
+
+    private static readonly string[] InternalRoleNames =
+    [
+        SystemRoles.Admin,
+        SystemRoles.RecruitmentSpecialist,
+        SystemRoles.HiringManager
+    ];
 
     [HttpGet]
     public async Task<IActionResult> Index(string? status, CancellationToken cancellationToken)
@@ -299,6 +317,135 @@ public sealed class ApplicationsPoolController(
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AssignParticipants(
+        int id,
+        int interviewId,
+        List<string> participantUserIds,
+        CancellationToken cancellationToken)
+    {
+        var interview = await dbContext.Interviews
+            .Include(candidateInterview => candidateInterview.JobApplication)
+            .ThenInclude(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateInterview => candidateInterview.JobApplication)
+            .ThenInclude(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(
+                candidateInterview =>
+                    candidateInterview.Id == interviewId &&
+                    candidateInterview.JobApplicationId == id,
+                cancellationToken);
+
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(interview.JobApplication.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var distinctRequestedIds = (participantUserIds ?? [])
+            .Where(participantId => !string.IsNullOrWhiteSpace(participantId))
+            .Distinct()
+            .ToList();
+
+        if (distinctRequestedIds.Count == 0)
+        {
+            TempData["StatusMessage"] = ParticipantRequiredMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var alreadyAssignedIds = await dbContext.InterviewParticipants
+            .Where(participant => participant.InterviewId == interview.Id)
+            .Select(participant => participant.ParticipantUserId)
+            .ToListAsync(cancellationToken);
+
+        var newParticipantIds = distinctRequestedIds.Except(alreadyAssignedIds).ToList();
+
+        if (newParticipantIds.Count == 0)
+        {
+            TempData["StatusMessage"] = ParticipantsAlreadyAssignedMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        try
+        {
+            var conflictingUserIds = new List<string>();
+            foreach (var participantId in newParticipantIds)
+            {
+                var hasConflict = await dbContext.InterviewParticipants
+                    .Where(
+                        participant =>
+                            participant.ParticipantUserId == participantId &&
+                            participant.InterviewId != interview.Id &&
+                            participant.Interview.Status != InterviewStatuses.Cancelled &&
+                            participant.Interview.StartAtUtc < interview.EndAtUtc &&
+                            participant.Interview.EndAtUtc > interview.StartAtUtc)
+                    .AnyAsync(cancellationToken);
+
+                if (hasConflict)
+                {
+                    conflictingUserIds.Add(participantId);
+                }
+            }
+
+            if (conflictingUserIds.Count > 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+
+                var conflictingUserNames = await dbContext.Users
+                    .Where(user => conflictingUserIds.Contains(user.Id))
+                    .Select(user => user.UserName)
+                    .ToListAsync(cancellationToken);
+
+                TempData["StatusMessage"] =
+                    $"Şu katılımcıların çakışan bir mülakatı var: {string.Join(", ", conflictingUserNames)}";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            var assignedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+            foreach (var participantId in newParticipantIds)
+            {
+                dbContext.InterviewParticipants.Add(
+                    new InterviewParticipant(interview.Id, participantId, assignedAtUtc));
+            }
+
+            var newParticipantNames = await dbContext.Users
+                .Where(user => newParticipantIds.Contains(user.Id))
+                .Select(user => user.UserName)
+                .ToListAsync(cancellationToken);
+
+            activityLogService.Stage(
+                new ActivityLogEntry(
+                    ActivityActionCodes.EntityUpdated,
+                    $"Mülakata katılımcı atandı: {string.Join(", ", newParticipantNames)}.",
+                    ActivityEntityTypes.Interview,
+                    interview.Id.ToString(),
+                    JobPostingId: interview.JobApplication.JobPostingId.ToString(),
+                    CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is DbUpdateException or SqlException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["StatusMessage"] = OperationFailedMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = ParticipantsAssignedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     private static IReadOnlyList<InterviewTypeOptionViewModel> BuildInterviewTypeOptions()
     {
         return InterviewTypes.All
@@ -448,22 +595,63 @@ public sealed class ApplicationsPoolController(
                     DescribeActionCode(log.ActionCode)))
             .ToList();
 
-        var interviews = await dbContext.Interviews
+        var interviewRows = await dbContext.Interviews
             .Where(interview => interview.JobApplicationId == application.Id)
             .OrderByDescending(interview => interview.StartAtUtc)
             .Select(
-                interview => new InterviewSummaryViewModel(
+                interview => new
+                {
                     interview.Id,
-                    InterviewTypes.GetDisplayLabel(interview.InterviewType),
+                    interview.InterviewType,
                     interview.StartAtUtc,
                     interview.EndAtUtc,
                     interview.OnlineMeetingLink,
                     interview.Location,
-                    InterviewStatuses.GetDisplayLabel(interview.Status)))
+                    interview.Status
+                })
             .ToListAsync(cancellationToken);
+
+        var interviewIds = interviewRows.Select(row => row.Id).ToList();
+
+        var participantRows = await dbContext.InterviewParticipants
+            .Where(participant => interviewIds.Contains(participant.InterviewId))
+            .Select(
+                participant => new
+                {
+                    participant.InterviewId,
+                    ParticipantName = participant.ParticipantUser.UserName
+                })
+            .ToListAsync(cancellationToken);
+
+        var participantLookup = participantRows
+            .GroupBy(row => row.InterviewId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(row => row.ParticipantName ?? string.Empty)
+                    .ToList());
+
+        var interviews = interviewRows
+            .Select(
+                row => new InterviewSummaryViewModel(
+                    row.Id,
+                    InterviewTypes.GetDisplayLabel(row.InterviewType),
+                    row.StartAtUtc,
+                    row.EndAtUtc,
+                    row.OnlineMeetingLink,
+                    row.Location,
+                    InterviewStatuses.GetDisplayLabel(row.Status),
+                    participantLookup.TryGetValue(row.Id, out var participantNames)
+                        ? participantNames
+                        : []))
+            .ToList();
 
         var canScheduleInterview =
             User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+
+        var participantOptions = canScheduleInterview
+            ? await BuildParticipantOptionsAsync(cancellationToken)
+            : [];
 
         return new ApplicationPoolDetailViewModel(
             application.Id,
@@ -486,7 +674,27 @@ public sealed class ApplicationsPoolController(
             noteViewModels,
             timelineViewModels,
             interviews,
-            canScheduleInterview);
+            canScheduleInterview,
+            participantOptions);
+    }
+
+    private async Task<IReadOnlyList<ParticipantOptionViewModel>> BuildParticipantOptionsAsync(
+        CancellationToken cancellationToken)
+    {
+        var roleIds = await dbContext.Roles
+            .Where(role => role.Name != null && InternalRoleNames.Contains(role.Name))
+            .Select(role => role.Id)
+            .ToListAsync(cancellationToken);
+
+        var internalUserIds = dbContext.UserRoles
+            .Where(userRole => roleIds.Contains(userRole.RoleId))
+            .Select(userRole => userRole.UserId);
+
+        return await dbContext.Users
+            .Where(user => user.IsActive && internalUserIds.Contains(user.Id))
+            .OrderBy(user => user.UserName)
+            .Select(user => new ParticipantOptionViewModel(user.Id, user.UserName ?? user.Id))
+            .ToListAsync(cancellationToken);
     }
 
     private static string DescribeActionCode(string actionCode)
