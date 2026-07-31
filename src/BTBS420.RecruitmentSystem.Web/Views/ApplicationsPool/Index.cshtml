@@ -1,0 +1,65 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool.ApplicationPoolIndexViewModel
+@using BTBS420.RecruitmentSystem.Web.Models
+
+@{
+    ViewData["Title"] = "Başvuru Havuzu";
+}
+
+<h1 class="h2 mb-4">Başvuru Havuzu</h1>
+
+<form asp-controller="ApplicationsPool" asp-action="Index" method="get" class="row g-2 mb-4">
+    <div class="col-12 col-md-4">
+        <label class="form-label" for="status">Durum</label>
+        <select class="form-select" id="status" name="status">
+            <option value="">Tümü</option>
+            @foreach (var statusOption in Model.StatusOptions)
+            {
+                <option value="@statusOption" selected="@(Model.SelectedStatus == statusOption)">@ApplicationStatuses.GetDisplayLabel(statusOption)</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">Filtrele</button>
+    </div>
+</form>
+
+@if (Model.Applications.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Kapsamınızda başvuru bulunamadı.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Aday</th>
+                <th scope="col">İlan</th>
+                <th scope="col">Pozisyon</th>
+                <th scope="col">Departman</th>
+                <th scope="col">Durum</th>
+                <th scope="col">Başvuru Tarihi</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var application in Model.Applications)
+            {
+                <tr>
+                    <td>@application.CandidateFullName</td>
+                    <td>@application.JobPostingTitle</td>
+                    <td>@application.PositionName</td>
+                    <td>@application.DepartmentName</td>
+                    <td><span class="badge text-bg-secondary">@application.ApplicationStatusLabel</span></td>
+                    <td>@application.AppliedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary" asp-controller="ApplicationsPool" asp-action="Details" asp-route-id="@application.Id">Detay</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

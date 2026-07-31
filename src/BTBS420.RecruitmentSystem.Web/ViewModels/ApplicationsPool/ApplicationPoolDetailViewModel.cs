@@ -1,0 +1,22 @@
+namespace BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool;
+
+public sealed record ApplicationPoolDetailViewModel(
+    int Id,
+    string ApplicationStatusLabel,
+    DateTime AppliedAtUtc,
+    DateTime? WithdrawnAtUtc,
+    string CandidateFullName,
+    string ProfessionalSummary,
+    string? TargetPositionName,
+    IReadOnlyList<string> Skills,
+    IReadOnlyList<string> Languages,
+    IReadOnlyList<CandidateEducationSummaryViewModel> Educations,
+    IReadOnlyList<CandidateExperienceSummaryViewModel> Experiences,
+    IReadOnlyList<ApplicationDocumentViewModel> Documents,
+    string JobPostingTitle,
+    string PositionName,
+    string DepartmentName,
+    string JobPostingStatus,
+    DateOnly ApplicationDeadline,
+    IReadOnlyList<ApplicationNoteViewModel> Notes,
+    IReadOnlyList<ApplicationTimelineEntryViewModel> Timeline);
