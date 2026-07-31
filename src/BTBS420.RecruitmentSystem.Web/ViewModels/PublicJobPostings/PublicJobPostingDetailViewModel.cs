@@ -6,4 +6,6 @@ public sealed record PublicJobPostingDetailViewModel(
     string Description,
     string PositionName,
     string DepartmentName,
-    DateOnly ApplicationDeadline);
+    DateOnly ApplicationDeadline,
+    bool CanApply,
+    bool AlreadyApplied);

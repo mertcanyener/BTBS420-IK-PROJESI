@@ -27,6 +27,22 @@
     </div>
 </div>
 
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-info" role="status">@statusMessage</div>
+}
+
 <div class="mt-3">
     <a class="btn btn-outline-secondary" asp-controller="PublicJobPostings" asp-action="Index">Listeye Dön</a>
+    @if (Model.CanApply)
+    {
+        <form asp-controller="JobApplications" asp-action="Create" method="post" asp-antiforgery="true" class="d-inline">
+            <input type="hidden" name="jobPostingId" value="@Model.Id" />
+            <button type="submit" class="btn btn-primary">Başvur</button>
+        </form>
+    }
+    else if (Model.AlreadyApplied)
+    {
+        <span class="badge text-bg-success align-middle">Zaten başvurdunuz</span>
+    }
 </div>
