@@ -1,0 +1,386 @@
+using System.Data;
+using BTBS420.RecruitmentSystem.Web.ActivityLogging;
+using BTBS420.RecruitmentSystem.Web.Authorization;
+using BTBS420.RecruitmentSystem.Web.Data;
+using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool;
+using BTBS420.RecruitmentSystem.Web.ViewModels.Interviews;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+
+namespace BTBS420.RecruitmentSystem.Web.Controllers;
+
+[Authorize]
+public sealed class InterviewsController(
+    ApplicationDbContext dbContext,
+    UserManager<ApplicationUser> userManager,
+    IActivityLogService activityLogService) : Controller
+{
+    private const string OperationFailedMessage = "İşlem tamamlanamadı, lütfen tekrar deneyin.";
+
+    private const string ConcurrencyConflictMessage =
+        "Bu mülakat siz düzenlerken başka biri tarafından güncellendi. " +
+        "Değişiklikler gösterildi, lütfen kontrol edip tekrar kaydedin.";
+
+    private const string MissingConcurrencyTokenMessage =
+        "Mülakat sürüm bilgisi eksik, lütfen sayfayı yeniden yükleyin.";
+
+    private const string InterviewUpdatedMessage = "Mülakat güncellendi.";
+
+    [HttpGet]
+    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    {
+        var query = dbContext.Interviews.AsQueryable();
+
+        if (User.IsInRole(SystemRoles.Candidate))
+        {
+            var userId = userManager.GetUserId(User);
+            if (userId is null)
+            {
+                return Forbid();
+            }
+
+            query = query.Where(
+                interview => interview.JobApplication.CandidateProfile.ApplicationUserId == userId);
+        }
+        else if (!User.IsInRole(SystemRoles.Admin))
+        {
+            var currentUser = await userManager.GetUserAsync(User);
+            if (currentUser is null)
+            {
+                return Forbid();
+            }
+
+            if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
+            {
+                query = query.Where(
+                    interview =>
+                        interview.JobApplication.JobPosting.ResponsibleUserId == currentUser.Id);
+            }
+            else if (User.IsInRole(SystemRoles.HiringManager))
+            {
+                query = currentUser.DepartmentId is null
+                    ? query.Where(interview => false)
+                    : query.Where(
+                        interview =>
+                            interview.JobApplication.JobPosting.Position.DepartmentId ==
+                            currentUser.DepartmentId.Value);
+            }
+            else
+            {
+                return Forbid();
+            }
+        }
+
+        var interviews = await query
+            .OrderByDescending(interview => interview.StartAtUtc)
+            .Select(
+                interview => new
+                {
+                    interview.Id,
+                    CandidateFirstName = interview.JobApplication.CandidateProfile.FirstName,
+                    CandidateLastName = interview.JobApplication.CandidateProfile.LastName,
+                    JobPostingTitle = interview.JobApplication.JobPosting.Title,
+                    interview.InterviewType,
+                    interview.StartAtUtc,
+                    interview.EndAtUtc,
+                    interview.Status
+                })
+            .ToListAsync(cancellationToken);
+
+        var listItems = interviews
+            .Select(
+                interview => new InterviewListItemViewModel(
+                    interview.Id,
+                    $"{interview.CandidateFirstName} {interview.CandidateLastName}",
+                    interview.JobPostingTitle,
+                    InterviewTypes.GetDisplayLabel(interview.InterviewType),
+                    interview.StartAtUtc,
+                    interview.EndAtUtc,
+                    InterviewStatuses.GetDisplayLabel(interview.Status)))
+            .ToList();
+
+        return View(new InterviewIndexViewModel(listItems));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
+    {
+        var interview = await LoadInterviewWithScopeAsync(id, cancellationToken);
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        var participantNames = await dbContext.InterviewParticipants
+            .Where(participant => participant.InterviewId == interview.Id)
+            .Select(participant => participant.ParticipantUser.UserName)
+            .ToListAsync(cancellationToken);
+
+        var canEdit = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+
+        var model = new InterviewDetailViewModel(
+            interview.Id,
+            $"{interview.JobApplication.CandidateProfile.FirstName} {interview.JobApplication.CandidateProfile.LastName}",
+            interview.JobApplication.JobPosting.Title,
+            interview.JobApplication.JobPosting.Position.Name,
+            interview.JobApplication.JobPosting.Position.Department.Name,
+            InterviewTypes.GetDisplayLabel(interview.InterviewType),
+            interview.StartAtUtc,
+            interview.EndAtUtc,
+            interview.OnlineMeetingLink,
+            interview.Location,
+            InterviewStatuses.GetDisplayLabel(interview.Status),
+            participantNames.Select(name => name ?? string.Empty).ToList(),
+            canEdit);
+
+        return View(model);
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpGet]
+    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
+    {
+        var interview = await LoadInterviewWithScopeAsync(id, cancellationToken);
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        var model = new InterviewEditFormViewModel
+        {
+            Id = interview.Id,
+            InterviewType = interview.InterviewType,
+            StartAtUtc = interview.StartAtUtc,
+            EndAtUtc = interview.EndAtUtc,
+            OnlineMeetingLink = interview.OnlineMeetingLink,
+            Location = interview.Location,
+            RowVersion = Convert.ToBase64String(interview.RowVersion),
+            InterviewTypeOptions = BuildInterviewTypeOptions()
+        };
+
+        return View(model);
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(
+        int id,
+        InterviewEditFormViewModel model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            model.InterviewTypeOptions = BuildInterviewTypeOptions();
+            return View(model);
+        }
+
+        var interview = await LoadInterviewWithScopeAsync(id, cancellationToken);
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrEmpty(model.RowVersion))
+        {
+            ModelState.AddModelError(string.Empty, MissingConcurrencyTokenMessage);
+            model.InterviewTypeOptions = BuildInterviewTypeOptions();
+            return View(model);
+        }
+
+        dbContext.Entry(interview).Property(entity => entity.RowVersion).OriginalValue =
+            Convert.FromBase64String(model.RowVersion);
+
+        var timeChanged =
+            interview.StartAtUtc != model.StartAtUtc!.Value || interview.EndAtUtc != model.EndAtUtc!.Value;
+
+        try
+        {
+            interview.Edit(
+                model.InterviewType,
+                model.StartAtUtc!.Value,
+                model.EndAtUtc!.Value,
+                model.OnlineMeetingLink,
+                model.Location);
+        }
+        catch (ArgumentException exception)
+        {
+            ModelState.AddModelError(string.Empty, exception.Message);
+            model.InterviewTypeOptions = BuildInterviewTypeOptions();
+            return View(model);
+        }
+
+        if (!timeChanged)
+        {
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return await HandleConcurrencyConflictAsync(model, cancellationToken);
+            }
+
+            TempData["StatusMessage"] = InterviewUpdatedMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        try
+        {
+            var participantIds = await dbContext.InterviewParticipants
+                .Where(participant => participant.InterviewId == interview.Id)
+                .Select(participant => participant.ParticipantUserId)
+                .ToListAsync(cancellationToken);
+
+            var conflictingUserIds = new List<string>();
+            foreach (var participantId in participantIds)
+            {
+                var hasConflict = await dbContext.InterviewParticipants
+                    .Where(
+                        participant =>
+                            participant.ParticipantUserId == participantId &&
+                            participant.InterviewId != interview.Id &&
+                            participant.Interview.Status != InterviewStatuses.Cancelled &&
+                            participant.Interview.StartAtUtc < interview.EndAtUtc &&
+                            participant.Interview.EndAtUtc > interview.StartAtUtc)
+                    .AnyAsync(cancellationToken);
+
+                if (hasConflict)
+                {
+                    conflictingUserIds.Add(participantId);
+                }
+            }
+
+            if (conflictingUserIds.Count > 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+
+                var conflictingUserNames = await dbContext.Users
+                    .Where(user => conflictingUserIds.Contains(user.Id))
+                    .Select(user => user.UserName)
+                    .ToListAsync(cancellationToken);
+
+                ModelState.AddModelError(
+                    string.Empty,
+                    $"Yeni zaman aralığı şu katılımcılarla çakışıyor: {string.Join(", ", conflictingUserNames)}");
+                model.InterviewTypeOptions = BuildInterviewTypeOptions();
+                return View(model);
+            }
+
+            activityLogService.Stage(
+                new ActivityLogEntry(
+                    ActivityActionCodes.EntityUpdated,
+                    "Mülakat zamanı güncellendi.",
+                    ActivityEntityTypes.Interview,
+                    interview.Id.ToString(),
+                    JobPostingId: interview.JobApplication.JobPostingId.ToString(),
+                    CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return await HandleConcurrencyConflictAsync(model, cancellationToken);
+        }
+        catch (Exception exception) when (exception is DbUpdateException or SqlException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            ModelState.AddModelError(string.Empty, OperationFailedMessage);
+            model.InterviewTypeOptions = BuildInterviewTypeOptions();
+            return View(model);
+        }
+
+        TempData["StatusMessage"] = InterviewUpdatedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private async Task<IActionResult> HandleConcurrencyConflictAsync(
+        InterviewEditFormViewModel model,
+        CancellationToken cancellationToken)
+    {
+        var currentInterview = await dbContext.Interviews
+            .AsNoTracking()
+            .FirstOrDefaultAsync(interview => interview.Id == model.Id, cancellationToken);
+
+        ModelState.AddModelError(string.Empty, ConcurrencyConflictMessage);
+        model.InterviewTypeOptions = BuildInterviewTypeOptions();
+        if (currentInterview is not null)
+        {
+            model.RowVersion = Convert.ToBase64String(currentInterview.RowVersion);
+        }
+
+        return View(nameof(Edit), model);
+    }
+
+    private static IReadOnlyList<InterviewTypeOptionViewModel> BuildInterviewTypeOptions()
+    {
+        return InterviewTypes.All
+            .Select(type => new InterviewTypeOptionViewModel(type, InterviewTypes.GetDisplayLabel(type)))
+            .OrderBy(option => option.Label, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private async Task<Interview?> LoadInterviewWithScopeAsync(int id, CancellationToken cancellationToken)
+    {
+        var interview = await dbContext.Interviews
+            .Include(candidateInterview => candidateInterview.JobApplication)
+            .ThenInclude(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .ThenInclude(position => position.Department)
+            .Include(candidateInterview => candidateInterview.JobApplication)
+            .ThenInclude(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateInterview => candidateInterview.Id == id, cancellationToken);
+
+        if (interview is null)
+        {
+            return null;
+        }
+
+        if (User.IsInRole(SystemRoles.Candidate))
+        {
+            var userId = userManager.GetUserId(User);
+            return userId is not null &&
+                interview.JobApplication.CandidateProfile.ApplicationUserId == userId
+                ? interview
+                : null;
+        }
+
+        if (User.IsInRole(SystemRoles.Admin))
+        {
+            return interview;
+        }
+
+        var currentUser = await userManager.GetUserAsync(User);
+        if (currentUser is null)
+        {
+            return null;
+        }
+
+        if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
+        {
+            return interview.JobApplication.JobPosting.ResponsibleUserId == currentUser.Id
+                ? interview
+                : null;
+        }
+
+        if (User.IsInRole(SystemRoles.HiringManager))
+        {
+            return currentUser.DepartmentId is not null &&
+                interview.JobApplication.JobPosting.Position.DepartmentId == currentUser.DepartmentId.Value
+                ? interview
+                : null;
+        }
+
+        return null;
+    }
+}

@@ -28,6 +28,9 @@ public sealed class InterviewConfiguration : IEntityTypeConfiguration<Interview>
         builder.Property(interview => interview.Location)
             .HasMaxLength(Interview.MaximumLocationLength);
 
+        builder.Property(interview => interview.RowVersion)
+            .IsRowVersion();
+
         builder.HasIndex(interview => interview.JobApplicationId);
 
         builder.HasOne(interview => interview.JobApplication)

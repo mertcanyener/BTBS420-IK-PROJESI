@@ -43,6 +43,21 @@ public sealed class Interview
 
     public string Status { get; private set; } = InterviewStatuses.Scheduled;
 
+    public byte[] RowVersion { get; private set; } = [];
+
+    internal void Edit(
+        string interviewType,
+        DateTime startAtUtc,
+        DateTime endAtUtc,
+        string? onlineMeetingLink,
+        string? location)
+    {
+        InterviewType = NormalizeInterviewType(interviewType);
+        (StartAtUtc, EndAtUtc) = ValidateTimeRange(startAtUtc, endAtUtc);
+        OnlineMeetingLink = NormalizeOnlineMeetingLink(InterviewType, onlineMeetingLink);
+        Location = NormalizeLocation(InterviewType, location);
+    }
+
     private static string NormalizeInterviewType(string interviewType)
     {
         if (!InterviewTypes.IsDefined(interviewType))

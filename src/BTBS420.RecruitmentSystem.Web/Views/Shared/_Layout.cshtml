@@ -37,6 +37,9 @@
                                 <li class="nav-item">
                                     <a class="nav-link" asp-controller="ApplicationsPool" asp-action="Index">Başvuru Havuzu</a>
                                 </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Interviews" asp-action="Index">Mülakatlar</a>
+                                </li>
                             }
                             @if (User.IsInRole("Aday"))
                             {
@@ -54,6 +57,9 @@
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" asp-controller="JobApplications" asp-action="Index">Başvurularım</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Interviews" asp-action="Index">Mülakatlarım</a>
                                 </li>
                             }
                             @if (User.IsInRole("Admin"))
