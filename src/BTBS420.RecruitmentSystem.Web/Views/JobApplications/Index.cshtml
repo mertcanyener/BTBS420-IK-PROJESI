@@ -27,7 +27,9 @@ else
                 <th scope="col">İlan</th>
                 <th scope="col">Pozisyon</th>
                 <th scope="col">İlan Durumu</th>
+                <th scope="col">Başvuru Durumu</th>
                 <th scope="col">Başvuru Tarihi</th>
+                <th scope="col">Geri Çekilme Tarihi</th>
                 <th scope="col" class="text-end">İşlemler</th>
             </tr>
         </thead>
@@ -38,9 +40,17 @@ else
                     <td>@application.JobPostingTitle</td>
                     <td>@application.PositionName</td>
                     <td>@application.JobPostingStatus</td>
+                    <td>@application.ApplicationStatusLabel</td>
                     <td>@application.AppliedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@(application.WithdrawnAtUtc.HasValue ? application.WithdrawnAtUtc.Value.ToString("dd.MM.yyyy HH:mm") : "-")</td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-primary" asp-controller="PublicJobPostings" asp-action="Details" asp-route-id="@application.JobPostingId">İlanı Görüntüle</a>
+                        @if (application.CanWithdraw)
+                        {
+                            <form asp-controller="JobApplications" asp-action="Withdraw" asp-route-id="@application.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Geri Çek</button>
+                            </form>
+                        }
                     </td>
                 </tr>
             }

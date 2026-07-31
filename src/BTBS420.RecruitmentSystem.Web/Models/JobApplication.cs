@@ -11,6 +11,7 @@ public sealed class JobApplication
         JobPostingId = jobPostingId;
         CandidateProfileId = candidateProfileId;
         AppliedAtUtc = appliedAtUtc;
+        Status = ApplicationStatuses.New;
     }
 
     public int Id { get; private set; }
@@ -23,5 +24,21 @@ public sealed class JobApplication
 
     public CandidateProfile CandidateProfile { get; private set; } = null!;
 
+    public string Status { get; private set; } = ApplicationStatuses.New;
+
     public DateTime AppliedAtUtc { get; private set; }
+
+    public DateTime? WithdrawnAtUtc { get; private set; }
+
+    internal void Withdraw(DateTime withdrawnAtUtc)
+    {
+        if (!ApplicationStatuses.CanWithdraw(Status))
+        {
+            throw new InvalidOperationException(
+                $"'{ApplicationStatuses.GetDisplayLabel(Status)}' durumundaki bir başvuru geri çekilemez.");
+        }
+
+        Status = ApplicationStatuses.Withdrawn;
+        WithdrawnAtUtc = withdrawnAtUtc;
+    }
 }

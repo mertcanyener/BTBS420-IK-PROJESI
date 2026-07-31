@@ -66,19 +66,34 @@ public sealed class JobApplicationsControllerTests : IClassFixture<TestWebApplic
         Assert.Equal(SystemRoles.Candidate, authorizeAttribute.Roles);
     }
 
-    [Fact]
-    public void Create_AntiforgeryTokenDogrulamasiIcerir()
+    [Theory]
+    [InlineData(nameof(JobApplicationsController.Create))]
+    [InlineData(nameof(JobApplicationsController.Withdraw))]
+    public void PostUclari_AntiforgeryTokenDogrulamasiIcerir(string actionName)
     {
         var controllerType = typeof(JobApplicationsController);
         var postMethod = controllerType
             .GetMethods()
             .Single(
                 method =>
-                    method.Name == nameof(JobApplicationsController.Create) &&
+                    method.Name == actionName &&
                     method.GetCustomAttribute<Microsoft.AspNetCore.Mvc.HttpPostAttribute>() is not null);
 
         Assert.NotNull(
             postMethod.GetCustomAttribute<Microsoft.AspNetCore.Mvc.ValidateAntiForgeryTokenAttribute>());
+    }
+
+    [Fact]
+    public async Task Withdraw_AntiforgeryTokenOlmadanReddeder()
+    {
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/JobApplications/Withdraw/1");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Candidate);
+        request.Content = new FormUrlEncodedContent([]);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
     private HttpClient CreateClient()

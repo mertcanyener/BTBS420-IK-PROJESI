@@ -164,6 +164,146 @@ public sealed class JobApplicationsSqlServerIntegrationTests :
         Assert.Equal(1, count);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Withdraw_YeniAsamadaGeriCekilirVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan50-withdraw-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var client = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(client, candidateId);
+        await ApplyAsync(client, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+
+        var response = await WithdrawAsync(client, candidateId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verificationContext = CreateRawContext();
+        var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Withdrawn, application.Status);
+        Assert.NotNull(application.WithdrawnAtUtc);
+
+        var log = await verificationContext.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.EntityStatusChanged &&
+                    l.TargetEntityType == ActivityEntityTypes.Application &&
+                    l.TargetEntityId == applicationId.ToString())
+            .FirstOrDefaultAsync();
+        Assert.NotNull(log);
+        Assert.Equal(candidateId, log.CandidateId);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Withdraw_MulakatAsamasindaGeriCekilebilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan50-interview-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var client = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(client, candidateId);
+        await ApplyAsync(client, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE JobApplications SET Status = {ApplicationStatuses.Interview} WHERE Id = {applicationId}");
+
+        var response = await WithdrawAsync(client, candidateId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verificationContext = CreateRawContext();
+        var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Withdrawn, application.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Withdraw_GeriCekilmisBasvuruTekrarGeriCekilemez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan50-twice-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var client = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(client, candidateId);
+        await ApplyAsync(client, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+
+        await WithdrawAsync(client, candidateId, applicationId);
+
+        await using var firstCheckContext = CreateRawContext();
+        var firstWithdrawnAt = (await firstCheckContext.JobApplications
+            .SingleAsync(a => a.Id == applicationId)).WithdrawnAtUtc;
+
+        var secondResponse = await WithdrawAsync(client, candidateId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, secondResponse.StatusCode);
+
+        await using var verificationContext = CreateRawContext();
+        var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Withdrawn, application.Status);
+        Assert.Equal(firstWithdrawnAt, application.WithdrawnAtUtc);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Withdraw_BaskaAdayinBasvurusunuGeriCekemezNotFoundDoner()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateAId = $"kan50-owner-{runId}";
+        var candidateBId = $"kan50-intruder-{runId}";
+        await CreateCandidateUserAsync(candidateAId);
+        await CreateCandidateUserAsync(candidateBId);
+
+        using var aClient = CreateClient(factory);
+        var profileAId = await CreateCandidateProfileAsync(aClient, candidateAId);
+        await ApplyAsync(aClient, candidateAId, jobPostingId);
+
+        using var bClient = CreateClient(factory);
+        await CreateCandidateProfileAsync(bClient, candidateBId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileAId)).Id;
+
+        var response = await WithdrawAsync(bClient, candidateBId, applicationId);
+
+        // Controller NotFound() döner; bilinen KAN-92 hatası (ErrorController'ın yalnızca
+        // GET kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor. Asıl güvenlik
+        // kontrolü aşağıdaki "durum değişmedi" doğrulaması.
+        Assert.True(
+            response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
+            $"Beklenmeyen durum kodu: {response.StatusCode}");
+
+        await using var verificationContext = CreateRawContext();
+        var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.New, application.Status);
+        Assert.Null(application.WithdrawnAtUtc);
+    }
+
     private static async Task<string> CreateRecruiterUserAsync(
         WebApplicationFactory<Program> factory,
         string userName,
@@ -373,6 +513,28 @@ public sealed class JobApplicationsSqlServerIntegrationTests :
                 ["jobPostingId"] = jobPostingId.ToString(),
                 ["__RequestVerificationToken"] = token
             });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> WithdrawAsync(
+        HttpClient client,
+        string candidateId,
+        int applicationId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client,
+            "/JobApplications",
+            SystemRoles.Candidate,
+            candidateId);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/JobApplications/Withdraw/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Candidate);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, candidateId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
 
         return await client.SendAsync(request);
     }

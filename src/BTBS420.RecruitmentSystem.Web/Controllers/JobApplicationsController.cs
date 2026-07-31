@@ -29,6 +29,8 @@ public sealed class JobApplicationsController(
 
     private const string ApplicationSucceededMessage = "Başvurunuz alındı.";
 
+    private const string WithdrawSucceededMessage = "Başvurunuz geri çekildi.";
+
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
@@ -43,15 +45,81 @@ public sealed class JobApplicationsController(
             .Where(application => application.CandidateProfileId == profile.Id)
             .OrderByDescending(application => application.AppliedAtUtc)
             .Select(
-                application => new JobApplicationListItemViewModel(
+                application => new
+                {
+                    application.Id,
                     application.JobPostingId,
-                    application.JobPosting.Title,
-                    application.JobPosting.Position.Name,
-                    application.JobPosting.Status,
-                    application.AppliedAtUtc))
+                    JobPostingTitle = application.JobPosting.Title,
+                    PositionName = application.JobPosting.Position.Name,
+                    JobPostingStatus = application.JobPosting.Status,
+                    application.Status,
+                    application.AppliedAtUtc,
+                    application.WithdrawnAtUtc
+                })
             .ToListAsync(cancellationToken);
 
-        return View(new JobApplicationIndexViewModel(applications));
+        var listItems = applications
+            .Select(
+                application => new JobApplicationListItemViewModel(
+                    application.Id,
+                    application.JobPostingId,
+                    application.JobPostingTitle,
+                    application.PositionName,
+                    application.JobPostingStatus,
+                    ApplicationStatuses.GetDisplayLabel(application.Status),
+                    application.AppliedAtUtc,
+                    application.WithdrawnAtUtc,
+                    ApplicationStatuses.CanWithdraw(application.Status)))
+            .ToList();
+
+        return View(new JobApplicationIndexViewModel(listItems));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Withdraw(int id, CancellationToken cancellationToken)
+    {
+        var profile = await GetCurrentProfileAsync(cancellationToken);
+        if (profile is null)
+        {
+            TempData["StatusMessage"] = ProfileRequiredMessage;
+            return RedirectToAction("Index", "CandidateProfile");
+        }
+
+        var application = await dbContext.JobApplications
+            .FirstOrDefaultAsync(
+                candidateApplication =>
+                    candidateApplication.Id == id &&
+                    candidateApplication.CandidateProfileId == profile.Id,
+                cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            application.Withdraw(timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Index));
+        }
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Aday başvurusunu geri çekti.",
+                ActivityEntityTypes.Application,
+                application.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: profile.ApplicationUserId));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        TempData["StatusMessage"] = WithdrawSucceededMessage;
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]

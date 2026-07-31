@@ -1,8 +1,12 @@
 namespace BTBS420.RecruitmentSystem.Web.ViewModels.JobApplications;
 
 public sealed record JobApplicationListItemViewModel(
+    int Id,
     int JobPostingId,
     string JobPostingTitle,
     string PositionName,
     string JobPostingStatus,
-    DateTime AppliedAtUtc);
+    string ApplicationStatusLabel,
+    DateTime AppliedAtUtc,
+    DateTime? WithdrawnAtUtc,
+    bool CanWithdraw);

@@ -17,6 +17,11 @@ public sealed class JobApplicationConfiguration : IEntityTypeConfiguration<JobAp
             .IsUnique()
             .HasDatabaseName("UX_JobApplications_JobPostingId_CandidateProfileId");
 
+        builder.Property(application => application.Status)
+            .HasMaxLength(32)
+            .HasDefaultValue(ApplicationStatuses.New)
+            .IsRequired();
+
         builder.HasOne(application => application.JobPosting)
             .WithMany()
             .HasForeignKey(application => application.JobPostingId)
