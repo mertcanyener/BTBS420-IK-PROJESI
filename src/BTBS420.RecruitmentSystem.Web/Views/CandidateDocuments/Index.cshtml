@@ -1,0 +1,55 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateDocuments.CandidateDocumentIndexViewModel
+
+@{
+    ViewData["Title"] = "Belgelerim";
+}
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <h1 class="h2 mb-0">Belgelerim</h1>
+    <a class="btn btn-primary" asp-controller="CandidateDocuments" asp-action="Create">Yeni Belge Yükle</a>
+</div>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="status">@statusMessage</div>
+}
+
+@if (Model.Documents.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Henüz belge yüklenmedi.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Belge Türü</th>
+                <th scope="col">Dosya Adı</th>
+                <th scope="col">Boyut</th>
+                <th scope="col">Yükleme Tarihi</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var document in Model.Documents)
+            {
+                <tr>
+                    <td>@document.DocumentTypeLabel</td>
+                    <td>@document.OriginalFileName</td>
+                    <td>@((document.FileSizeBytes / 1024.0).ToString("N0")) KB</td>
+                    <td>@document.UploadedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="CandidateDocuments" asp-action="Download" asp-route-id="@document.Id">İndir</a>
+                        <form asp-controller="CandidateDocuments" asp-action="Delete" asp-route-id="@document.Id" method="post" asp-antiforgery="true" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

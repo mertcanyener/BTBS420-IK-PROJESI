@@ -1,0 +1,41 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateDocuments.CandidateDocumentFormViewModel
+
+@{
+    ViewData["Title"] = "Yeni Belge Yükle";
+}
+
+<h1 class="h3 mb-4">Yeni Belge Yükle</h1>
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <form asp-controller="CandidateDocuments" asp-action="Create" method="post" enctype="multipart/form-data" asp-antiforgery="true" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="DocumentType" class="form-label"></label>
+                <select asp-for="DocumentType" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.DocumentTypeOptions)
+                    {
+                        <option value="@option.Value">@option.Label</option>
+                    }
+                </select>
+                <span asp-validation-for="DocumentType" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="File" class="form-label"></label>
+                <input asp-for="File" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                <span asp-validation-for="File" class="text-danger"></span>
+                <div class="form-text">İzin verilen türler: PDF, DOC, DOCX, JPG, PNG. Azami boyut 10 MB.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Yükle</button>
+            <a class="btn btn-outline-secondary" asp-controller="CandidateDocuments" asp-action="Index">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

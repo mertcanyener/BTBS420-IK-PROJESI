@@ -16,6 +16,7 @@ public static class ActivityActionCodes
     public const string EntityStatusChanged = "entity.status-changed";
     public const string EntityArchived = "entity.archived";
     public const string EntityDeleted = "entity.deleted";
+    public const string EntityDownloaded = "entity.downloaded";
 
     private static readonly FrozenSet<string> DefinedCodes =
         new[]
@@ -31,7 +32,8 @@ public static class ActivityActionCodes
             EntityUpdated,
             EntityStatusChanged,
             EntityArchived,
-            EntityDeleted
+            EntityDeleted,
+            EntityDownloaded
         }.ToFrozenSet(StringComparer.Ordinal);
 
     public static IReadOnlySet<string> All => DefinedCodes;

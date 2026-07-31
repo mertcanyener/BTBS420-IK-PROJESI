@@ -8,6 +8,7 @@ public static class AuthorizationPolicies
     public const string RecruitmentSpecialistOnly = "Identity.RecruitmentSpecialistOnly";
     public const string HiringManagerOnly = "Identity.HiringManagerOnly";
     public const string CandidateOnly = "Identity.CandidateOnly";
+    public const string RecruitmentStaffOnly = "Identity.RecruitmentStaffOnly";
 
     public static void Configure(AuthorizationOptions options)
     {
@@ -18,17 +19,23 @@ public static class AuthorizationPolicies
             SystemRoles.RecruitmentSpecialist);
         AddRolePolicy(options, HiringManagerOnly, SystemRoles.HiringManager);
         AddRolePolicy(options, CandidateOnly, SystemRoles.Candidate);
+        AddRolePolicy(
+            options,
+            RecruitmentStaffOnly,
+            SystemRoles.Admin,
+            SystemRoles.RecruitmentSpecialist,
+            SystemRoles.HiringManager);
     }
 
     private static void AddRolePolicy(
         AuthorizationOptions options,
         string policyName,
-        string roleName)
+        params string[] roleNames)
     {
         options.AddPolicy(
             policyName,
             policy => policy
                 .RequireAuthenticatedUser()
-                .RequireRole(roleName));
+                .RequireRole(roleNames));
     }
 }

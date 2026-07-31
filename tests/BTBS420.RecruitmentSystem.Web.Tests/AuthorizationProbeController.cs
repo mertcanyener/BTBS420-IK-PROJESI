@@ -15,4 +15,11 @@ public sealed class AuthorizationProbeController : ControllerBase
     {
         return NoContent();
     }
+
+    [Authorize(Policy = AuthorizationPolicies.RecruitmentStaffOnly)]
+    [HttpGet("recruitment-staff")]
+    public IActionResult RecruitmentStaffOnly()
+    {
+        return NoContent();
+    }
 }

@@ -5,6 +5,7 @@ using BTBS420.RecruitmentSystem.Web.Identity;
 using BTBS420.RecruitmentSystem.Web.Models;
 using BTBS420.RecruitmentSystem.Web.Notifications;
 using BTBS420.RecruitmentSystem.Web.PasswordReset;
+using BTBS420.RecruitmentSystem.Web.Storage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -72,6 +73,9 @@ builder.Services.AddScoped<INotificationPublisher>(
     serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
 builder.Services.AddScoped<INotificationCenterService>(
     serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
+builder.Services.Configure<CandidateDocumentStorageOptions>(
+    builder.Configuration.GetSection(CandidateDocumentStorageOptions.SectionName));
+builder.Services.AddScoped<ICandidateDocumentStorageService, FileSystemCandidateDocumentStorageService>();
 
 var app = builder.Build();
 

@@ -20,6 +20,7 @@ public static class ActivityEntityTypes
     public const string Candidate = "candidate";
     public const string CandidateEducation = "candidate-education";
     public const string CandidateExperience = "candidate-experience";
+    public const string CandidateDocument = "candidate-document";
     public const string Application = "application";
     public const string Interview = "interview";
     public const string Offer = "offer";
@@ -44,6 +45,7 @@ public static class ActivityEntityTypes
             Candidate,
             CandidateEducation,
             CandidateExperience,
+            CandidateDocument,
             Application,
             Interview,
             Offer,
