@@ -23,6 +23,8 @@ public sealed class ApplicationsPoolController(
 
     private const string NoteAddedMessage = "Not eklendi.";
 
+    private const string InterviewScheduledMessage = "Mülakat planlandı.";
+
     [HttpGet]
     public async Task<IActionResult> Index(string? status, CancellationToken cancellationToken)
     {
@@ -209,6 +211,102 @@ public sealed class ApplicationsPoolController(
         return File(stream, document.ContentType, document.OriginalFileName);
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpGet]
+    public async Task<IActionResult> CreateInterview(int id, CancellationToken cancellationToken)
+    {
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        return View(
+            new InterviewFormViewModel { InterviewTypeOptions = BuildInterviewTypeOptions() });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateInterview(
+        int id,
+        InterviewFormViewModel model,
+        CancellationToken cancellationToken)
+    {
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            model.InterviewTypeOptions = BuildInterviewTypeOptions();
+            return View(model);
+        }
+
+        Interview interview;
+        try
+        {
+            interview = new Interview(
+                application.Id,
+                model.InterviewType,
+                model.StartAtUtc!.Value,
+                model.EndAtUtc!.Value,
+                model.OnlineMeetingLink,
+                model.Location);
+        }
+        catch (ArgumentException exception)
+        {
+            ModelState.AddModelError(string.Empty, exception.Message);
+            model.InterviewTypeOptions = BuildInterviewTypeOptions();
+            return View(model);
+        }
+
+        dbContext.Interviews.Add(interview);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityCreated,
+                "Mülakat planlandı.",
+                ActivityEntityTypes.Interview,
+                interview.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: application.CandidateProfile.ApplicationUserId));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        TempData["StatusMessage"] = InterviewScheduledMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private static IReadOnlyList<InterviewTypeOptionViewModel> BuildInterviewTypeOptions()
+    {
+        return InterviewTypes.All
+            .Select(type => new InterviewTypeOptionViewModel(type, InterviewTypes.GetDisplayLabel(type)))
+            .OrderBy(option => option.Label, StringComparer.Ordinal)
+            .ToList();
+    }
+
     private async Task<bool> IsAuthorizedForApplicationAsync(JobPosting jobPosting)
     {
         if (User.IsInRole(SystemRoles.Admin))
@@ -350,6 +448,23 @@ public sealed class ApplicationsPoolController(
                     DescribeActionCode(log.ActionCode)))
             .ToList();
 
+        var interviews = await dbContext.Interviews
+            .Where(interview => interview.JobApplicationId == application.Id)
+            .OrderByDescending(interview => interview.StartAtUtc)
+            .Select(
+                interview => new InterviewSummaryViewModel(
+                    interview.Id,
+                    InterviewTypes.GetDisplayLabel(interview.InterviewType),
+                    interview.StartAtUtc,
+                    interview.EndAtUtc,
+                    interview.OnlineMeetingLink,
+                    interview.Location,
+                    InterviewStatuses.GetDisplayLabel(interview.Status)))
+            .ToListAsync(cancellationToken);
+
+        var canScheduleInterview =
+            User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+
         return new ApplicationPoolDetailViewModel(
             application.Id,
             ApplicationStatuses.GetDisplayLabel(application.Status),
@@ -369,7 +484,9 @@ public sealed class ApplicationsPoolController(
             application.JobPosting.Status,
             application.JobPosting.ApplicationDeadline,
             noteViewModels,
-            timelineViewModels);
+            timelineViewModels,
+            interviews,
+            canScheduleInterview);
     }
 
     private static string DescribeActionCode(string actionCode)

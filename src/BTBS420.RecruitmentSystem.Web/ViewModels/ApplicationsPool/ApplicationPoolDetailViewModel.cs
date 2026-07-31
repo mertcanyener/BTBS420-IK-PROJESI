@@ -19,4 +19,6 @@ public sealed record ApplicationPoolDetailViewModel(
     string JobPostingStatus,
     DateOnly ApplicationDeadline,
     IReadOnlyList<ApplicationNoteViewModel> Notes,
-    IReadOnlyList<ApplicationTimelineEntryViewModel> Timeline);
+    IReadOnlyList<ApplicationTimelineEntryViewModel> Timeline,
+    IReadOnlyList<InterviewSummaryViewModel> Interviews,
+    bool CanScheduleInterview);

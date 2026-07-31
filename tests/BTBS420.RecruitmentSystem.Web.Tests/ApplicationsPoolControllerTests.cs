@@ -78,6 +78,51 @@ public sealed class ApplicationsPoolControllerTests : IClassFixture<TestWebAppli
             postMethod.GetCustomAttribute<Microsoft.AspNetCore.Mvc.ValidateAntiForgeryTokenAttribute>());
     }
 
+    [Fact]
+    public async Task CreateInterview_YoneticiRolunuReddeder()
+    {
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/ApplicationsPool/CreateInterview/1");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.HiringManager);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateInterview_AntiforgeryTokenOlmadanReddeder()
+    {
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ApplicationsPool/CreateInterview/1");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Admin);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["InterviewType"] = "online" });
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(nameof(ApplicationsPoolController.CreateInterview))]
+    public void CreateInterview_YalnizAdminVeUzmanRolleriniKabulEder(string actionName)
+    {
+        var controllerType = typeof(ApplicationsPoolController);
+        var getMethod = controllerType
+            .GetMethods()
+            .Single(
+                method =>
+                    method.Name == actionName &&
+                    method.GetCustomAttribute<Microsoft.AspNetCore.Mvc.HttpGetAttribute>() is not null);
+
+        var authorizeAttribute = getMethod.GetCustomAttribute<AuthorizeAttribute>();
+        Assert.NotNull(authorizeAttribute);
+        Assert.Equal(
+            $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}",
+            authorizeAttribute.Roles);
+    }
+
     private HttpClient CreateClient()
     {
         return _factory.CreateClient(

@@ -1,0 +1,61 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool.InterviewFormViewModel
+
+@{
+    ViewData["Title"] = "Mülakat Planla";
+    var applicationId = ViewContext.RouteData.Values["id"];
+}
+
+<h1 class="h3 mb-4">Mülakat Planla</h1>
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <form asp-controller="ApplicationsPool" asp-action="CreateInterview" asp-route-id="@applicationId" method="post" asp-antiforgery="true" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="InterviewType" class="form-label"></label>
+                <select asp-for="InterviewType" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.InterviewTypeOptions)
+                    {
+                        <option value="@option.Value">@option.Label</option>
+                    }
+                </select>
+                <span asp-validation-for="InterviewType" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="StartAtUtc" class="form-label"></label>
+                <input asp-for="StartAtUtc" class="form-control" />
+                <span asp-validation-for="StartAtUtc" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="EndAtUtc" class="form-label"></label>
+                <input asp-for="EndAtUtc" class="form-control" />
+                <span asp-validation-for="EndAtUtc" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="OnlineMeetingLink" class="form-label"></label>
+                <input asp-for="OnlineMeetingLink" class="form-control" />
+                <span asp-validation-for="OnlineMeetingLink" class="text-danger"></span>
+                <div class="form-text">Yalnızca çevrimiçi mülakatlar için zorunludur.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Location" class="form-label"></label>
+                <input asp-for="Location" class="form-control" />
+                <span asp-validation-for="Location" class="text-danger"></span>
+                <div class="form-text">Yalnızca yüz yüze mülakatlar için zorunludur.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Planla</button>
+            <a class="btn btn-outline-secondary" asp-controller="ApplicationsPool" asp-action="Details" asp-route-id="@applicationId">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

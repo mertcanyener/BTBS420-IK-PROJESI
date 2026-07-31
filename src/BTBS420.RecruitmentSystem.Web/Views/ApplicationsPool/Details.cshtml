@@ -164,6 +164,48 @@
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h2 class="h5 mb-0">Mülakatlar</h2>
+                    @if (Model.CanScheduleInterview)
+                    {
+                        <a class="btn btn-sm btn-primary" asp-controller="ApplicationsPool" asp-action="CreateInterview" asp-route-id="@Model.Id">Mülakat Planla</a>
+                    }
+                </div>
+                @if (Model.Interviews.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Henüz mülakat planlanmadı.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var interview in Model.Interviews)
+                        {
+                            <li class="border-top pt-2 mb-2">
+                                <div>
+                                    <span class="badge text-bg-secondary">@interview.InterviewTypeLabel</span>
+                                    <span class="badge text-bg-info">@interview.StatusLabel</span>
+                                </div>
+                                <div>
+                                    @interview.StartAtUtc.ToString("dd.MM.yyyy HH:mm") -
+                                    @interview.EndAtUtc.ToString("dd.MM.yyyy HH:mm")
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(interview.OnlineMeetingLink))
+                                {
+                                    <div>Link: <a href="@interview.OnlineMeetingLink" target="_blank" rel="noopener">@interview.OnlineMeetingLink</a></div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(interview.Location))
+                                {
+                                    <div>Konum: @interview.Location</div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
                 <h2 class="h5 mb-3">Notlar</h2>
                 <form asp-controller="ApplicationsPool" asp-action="AddNote" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mb-3">
                     <div class="mb-2">
