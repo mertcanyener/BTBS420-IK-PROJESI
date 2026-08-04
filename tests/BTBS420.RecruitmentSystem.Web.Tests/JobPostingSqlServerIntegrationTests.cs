@@ -580,7 +580,7 @@ public sealed class JobPostingSqlServerIntegrationTests :
                 TestAuthenticationHandler.DefaultUserId);
         }
 
-        var body = await GetPublicIndexBodyAsync(factory);
+        var body = await GetPublicIndexBodyAsync(factory, $"?positionId={positionId}");
 
         Assert.Contains(publishedTitle, body);
         Assert.DoesNotContain(draftTitle, body);
