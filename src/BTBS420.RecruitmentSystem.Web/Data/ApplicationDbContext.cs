@@ -60,6 +60,8 @@ public sealed class ApplicationDbContext(
 
     public DbSet<Offer> Offers => Set<Offer>();
 
+    public DbSet<OfferStatusChange> OfferStatusChanges => Set<OfferStatusChange>();
+
     public override int SaveChanges()
     {
         return SaveChanges(acceptAllChangesOnSuccess: true);
@@ -69,6 +71,7 @@ public sealed class ApplicationDbContext(
     {
         EnsureActivityLogsAreAppendOnly();
         EnsureJobApplicationStatusChangesAreAppendOnly();
+        EnsureOfferStatusChangesAreAppendOnly();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -86,6 +89,7 @@ public sealed class ApplicationDbContext(
     {
         EnsureActivityLogsAreAppendOnly();
         EnsureJobApplicationStatusChangesAreAppendOnly();
+        EnsureOfferStatusChangesAreAppendOnly();
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
             cancellationToken);
@@ -137,6 +141,7 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new InterviewParticipantConfiguration());
         builder.ApplyConfiguration(new InterviewEvaluationConfiguration());
         builder.ApplyConfiguration(new OfferConfiguration());
+        builder.ApplyConfiguration(new OfferStatusChangeConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()
@@ -164,6 +169,20 @@ public sealed class ApplicationDbContext(
         {
             throw new InvalidOperationException(
                 "Başvuru durum geçmişi yalnızca eklenebilir; güncellenemez veya silinemez.");
+        }
+    }
+
+    private void EnsureOfferStatusChangesAreAppendOnly()
+    {
+        var mutatedStatusChange = ChangeTracker
+            .Entries<OfferStatusChange>()
+            .FirstOrDefault(
+                entry => entry.State is EntityState.Modified or EntityState.Deleted);
+
+        if (mutatedStatusChange is not null)
+        {
+            throw new InvalidOperationException(
+                "Teklif durum geçmişi yalnızca eklenebilir; güncellenemez veya silinemez.");
         }
     }
 }

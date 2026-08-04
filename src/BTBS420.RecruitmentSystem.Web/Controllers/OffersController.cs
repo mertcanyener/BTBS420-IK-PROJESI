@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BTBS420.RecruitmentSystem.Web.Controllers;
 
-[Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+[Authorize(Policy = AuthorizationPolicies.RecruitmentStaffOnly)]
 public sealed class OffersController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
@@ -32,6 +32,15 @@ public sealed class OffersController(
     private const string ConcurrencyConflictMessage =
         "Bu teklif siz işlem yaparken başka biri tarafından güncellendi, lütfen tekrar deneyin.";
 
+    private const string OfferSubmittedMessage = "Teklif yönetici onayına gönderildi.";
+
+    private const string OfferApprovedMessage = "Teklif onaylandı.";
+
+    private const string OfferRejectedMessage = "Teklif reddedildi.";
+
+    private const string RejectReasonRequiredMessage = "Red için bir gerekçe belirtmelisiniz.";
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpGet]
     public async Task<IActionResult> Create(int applicationId, CancellationToken cancellationToken)
     {
@@ -64,6 +73,7 @@ public sealed class OffersController(
             });
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
@@ -148,7 +158,9 @@ public sealed class OffersController(
             return NotFound();
         }
 
-        if (!await IsAuthorizedForApplicationAsync(offer.JobApplication.JobPosting))
+        var canManage = await IsAuthorizedForApplicationAsync(offer.JobApplication.JobPosting);
+        var canDecide = await IsAuthorizedForDecisionAsync(offer.JobApplication.JobPosting);
+        if (!canManage && !canDecide)
         {
             return NotFound();
         }
@@ -163,13 +175,19 @@ public sealed class OffersController(
                     $"{offer.JobApplication.CandidateProfile.FirstName} " +
                     $"{offer.JobApplication.CandidateProfile.LastName}",
                 JobPostingTitle = offer.JobApplication.JobPosting.Title,
+                Status = offer.Status,
+                StatusLabel = OfferStatuses.GetDisplayLabel(offer.Status),
                 Salary = offer.Salary,
                 StartDate = offer.StartDate,
                 Note = offer.Note,
-                RowVersion = Convert.ToBase64String(offer.RowVersion)
+                RowVersion = Convert.ToBase64String(offer.RowVersion),
+                CanEdit = canManage && offer.Status == OfferStatuses.Draft,
+                CanSubmit = canManage && offer.Status == OfferStatuses.Draft,
+                CanDecide = canDecide && offer.Status == OfferStatuses.PendingManagerApproval
             });
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(
@@ -247,6 +265,186 @@ public sealed class OffersController(
         return RedirectToAction(nameof(Edit), new { id });
     }
 
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Submit(int id, CancellationToken cancellationToken)
+    {
+        var offer = await LoadOfferAsync(id, cancellationToken);
+        if (offer is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(offer.JobApplication.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        OfferStatusChange statusChange;
+        try
+        {
+            statusChange = offer.Submit(actorUserId, timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        dbContext.OfferStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Uzman teklifi yönetici onayına gönderdi.",
+                ActivityEntityTypes.Offer,
+                offer.Id.ToString(),
+                JobPostingId: offer.JobApplication.JobPostingId.ToString(),
+                CandidateId: offer.JobApplication.CandidateProfile.ApplicationUserId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = ConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        TempData["StatusMessage"] = OfferSubmittedMessage;
+        return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.HiringManager}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Approve(int id, CancellationToken cancellationToken)
+    {
+        var offer = await LoadOfferAsync(id, cancellationToken);
+        if (offer is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForDecisionAsync(offer.JobApplication.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        OfferStatusChange statusChange;
+        try
+        {
+            statusChange = offer.Approve(actorUserId, timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        dbContext.OfferStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Yönetici teklifi onayladı.",
+                ActivityEntityTypes.Offer,
+                offer.Id.ToString(),
+                JobPostingId: offer.JobApplication.JobPostingId.ToString(),
+                CandidateId: offer.JobApplication.CandidateProfile.ApplicationUserId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = ConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        TempData["StatusMessage"] = OfferApprovedMessage;
+        return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.HiringManager}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reject(int id, string? reason, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["StatusMessage"] = RejectReasonRequiredMessage;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var offer = await LoadOfferAsync(id, cancellationToken);
+        if (offer is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForDecisionAsync(offer.JobApplication.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        OfferStatusChange statusChange;
+        try
+        {
+            statusChange = offer.Reject(actorUserId, reason, timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        dbContext.OfferStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Yönetici teklifi reddetti.",
+                ActivityEntityTypes.Offer,
+                offer.Id.ToString(),
+                JobPostingId: offer.JobApplication.JobPostingId.ToString(),
+                CandidateId: offer.JobApplication.CandidateProfile.ApplicationUserId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = ConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        TempData["StatusMessage"] = OfferRejectedMessage;
+        return RedirectToAction(nameof(Edit), new { id });
+    }
+
     private async Task<string?> ValidateCreatePreconditionsAsync(
         JobApplication application,
         CancellationToken cancellationToken)
@@ -291,5 +489,23 @@ public sealed class OffersController(
 
         var currentUser = await userManager.GetUserAsync(User);
         return currentUser is not null && jobPosting.ResponsibleUserId == currentUser.Id;
+    }
+
+    private async Task<bool> IsAuthorizedForDecisionAsync(JobPosting jobPosting)
+    {
+        if (User.IsInRole(SystemRoles.Admin))
+        {
+            return true;
+        }
+
+        if (!User.IsInRole(SystemRoles.HiringManager))
+        {
+            return false;
+        }
+
+        var currentUser = await userManager.GetUserAsync(User);
+        return currentUser is not null &&
+            currentUser.DepartmentId is not null &&
+            jobPosting.Position.DepartmentId == currentUser.DepartmentId.Value;
     }
 }

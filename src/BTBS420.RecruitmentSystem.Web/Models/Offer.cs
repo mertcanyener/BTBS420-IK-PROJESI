@@ -60,6 +60,49 @@ public sealed class Offer
         Note = NormalizeNote(note);
     }
 
+    internal OfferStatusChange Submit(string actorUserId, DateTime changedAtUtc)
+    {
+        if (Salary <= 0 || StartDate == default)
+        {
+            throw new InvalidOperationException("Eksik bilgiler nedeniyle teklif gönderilemez.");
+        }
+
+        return TransitionTo(OfferStatuses.PendingManagerApproval, actorUserId, reason: null, changedAtUtc);
+    }
+
+    internal OfferStatusChange Approve(string actorUserId, DateTime changedAtUtc)
+    {
+        return TransitionTo(OfferStatuses.Approved, actorUserId, reason: null, changedAtUtc);
+    }
+
+    internal OfferStatusChange Reject(string actorUserId, string reason, DateTime changedAtUtc)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("Red gerekçesi boş olamaz.", nameof(reason));
+        }
+
+        return TransitionTo(OfferStatuses.RejectedByManager, actorUserId, reason, changedAtUtc);
+    }
+
+    private OfferStatusChange TransitionTo(
+        string newStatus,
+        string actorUserId,
+        string? reason,
+        DateTime changedAtUtc)
+    {
+        if (!OfferStatuses.IsValidTransition(Status, newStatus))
+        {
+            throw new InvalidOperationException(
+                $"'{OfferStatuses.GetDisplayLabel(Status)}' durumundaki bir teklif " +
+                $"'{OfferStatuses.GetDisplayLabel(newStatus)}' durumuna geçemez.");
+        }
+
+        var change = new OfferStatusChange(Id, Status, newStatus, actorUserId, reason, changedAtUtc);
+        Status = newStatus;
+        return change;
+    }
+
     private static string NormalizeCreatedByUserId(string createdByUserId)
     {
         if (string.IsNullOrWhiteSpace(createdByUserId))

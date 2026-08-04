@@ -13,6 +13,16 @@ public sealed class OfferFormViewModel
 
     public string JobPostingTitle { get; set; } = string.Empty;
 
+    public string Status { get; set; } = OfferStatuses.Draft;
+
+    public string StatusLabel { get; set; } = OfferStatuses.GetDisplayLabel(OfferStatuses.Draft);
+
+    public bool CanEdit { get; set; } = true;
+
+    public bool CanSubmit { get; set; }
+
+    public bool CanDecide { get; set; }
+
     [Display(Name = "Maaş")]
     [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Maaş sıfırdan büyük olmalıdır.")]
     public decimal? Salary { get; set; }

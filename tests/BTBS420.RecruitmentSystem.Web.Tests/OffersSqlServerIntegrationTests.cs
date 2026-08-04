@@ -253,6 +253,275 @@ public sealed class OffersSqlServerIntegrationTests : IClassFixture<TestWebAppli
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Submit_TaslakYoneticiOnayinaGonderilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, recruiterId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+
+        var response = await SubmitOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            offerId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.PendingManagerApproval, offer.Status);
+
+        var statusChange = await verifyContext.OfferStatusChanges.SingleAsync(c => c.OfferId == offerId);
+        Assert.Equal(OfferStatuses.Draft, statusChange.FromStatus);
+        Assert.Equal(OfferStatuses.PendingManagerApproval, statusChange.ToStatus);
+        Assert.Equal(recruiterId, statusChange.ActorUserId);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Submit_ZatenGonderilmisTeklifIcinTekrarBasarisizOlur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, recruiterId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        await using var verifyContext = CreateRawContext();
+        var statusChangeCount = await verifyContext.OfferStatusChanges.CountAsync(c => c.OfferId == offerId);
+        Assert.Equal(1, statusChangeCount);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Approve_YoneticiOnayindakiTeklifiOnaylar()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan62-manager-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        using var managerClient = CreateClient(factory);
+        var response = await ApproveOfferAsync(managerClient, SystemRoles.HiringManager, managerId, offerId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.Approved, offer.Status);
+
+        var statusChange = await verifyContext.OfferStatusChanges
+            .SingleAsync(c => c.OfferId == offerId && c.ToStatus == OfferStatuses.Approved);
+        Assert.Equal(managerId, statusChange.ActorUserId);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Approve_TaslaktakiTeklifBasarisizOlur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan62-manager-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+
+        using var managerClient = CreateClient(factory);
+        var response = await ApproveOfferAsync(managerClient, SystemRoles.HiringManager, managerId, offerId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.Draft, offer.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reject_GerekceAktorVeZamanKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan62-manager-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        using var managerClient = CreateClient(factory);
+        var response = await RejectOfferAsync(
+            managerClient,
+            SystemRoles.HiringManager,
+            managerId,
+            offerId,
+            "Bütçe uygun değil.");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.RejectedByManager, offer.Status);
+
+        var statusChange = await verifyContext.OfferStatusChanges
+            .SingleAsync(c => c.OfferId == offerId && c.ToStatus == OfferStatuses.RejectedByManager);
+        Assert.Equal(managerId, statusChange.ActorUserId);
+        Assert.Equal("Bütçe uygun değil.", statusChange.Reason);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reject_GerekceOlmadanBasarisizOlur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan62-manager-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        using var managerClient = CreateClient(factory);
+        var response = await RejectOfferAsync(managerClient, SystemRoles.HiringManager, managerId, offerId, null);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.PendingManagerApproval, offer.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Approve_KapsamDisindakiYoneticiErisemezNotFoundDoner()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, recruiterId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+
+        var otherDepartmentId = await CreateDepartmentAsync(setupClient, $"Kan62-OtherDept-{runId}");
+        var intruderManagerId = await CreateHiringManagerUserAsync(
+            factory,
+            $"kan62-intruder-{runId}",
+            otherDepartmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        using var intruderClient = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/Offers/Edit/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.HiringManager);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, intruderManagerId);
+
+        var response = await intruderClient.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static async Task SetApplicationStatusAsync(int applicationId, string status)
     {
         await using var context = CreateRawContext();
@@ -328,6 +597,63 @@ public sealed class OffersSqlServerIntegrationTests : IClassFixture<TestWebAppli
         var rowVersion = Convert.ToBase64String(
             (await context.Offers.SingleAsync(o => o.Id == offerId)).RowVersion);
         formFields["RowVersion"] = rowVersion;
+
+        request.Content = new FormUrlEncodedContent(formFields);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SubmitOfferAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int offerId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(client, $"/Offers/Edit/{offerId}", role, userId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Submit/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> ApproveOfferAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int offerId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(client, $"/Offers/Edit/{offerId}", role, userId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Approve/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> RejectOfferAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int offerId,
+        string? reason)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(client, $"/Offers/Edit/{offerId}", role, userId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Reject/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+
+        var formFields = new Dictionary<string, string> { ["__RequestVerificationToken"] = token };
+        if (reason is not null)
+        {
+            formFields["reason"] = reason;
+        }
 
         request.Content = new FormUrlEncodedContent(formFields);
         return await client.SendAsync(request);
@@ -580,6 +906,45 @@ public sealed class OffersSqlServerIntegrationTests : IClassFixture<TestWebAppli
         }
 
         var roleResult = await userManager.AddToRoleAsync(user, SystemRoles.RecruitmentSpecialist);
+        if (!roleResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                string.Join(", ", roleResult.Errors.Select(error => error.Description)));
+        }
+
+        return user.Id;
+    }
+
+    private static async Task<string> CreateHiringManagerUserAsync(
+        WebApplicationFactory<Program> factory,
+        string userName,
+        int departmentId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+        if (!await roleManager.RoleExistsAsync(SystemRoles.HiringManager))
+        {
+            await roleManager.CreateAsync(new IdentityRole(SystemRoles.HiringManager));
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = userName,
+            Email = $"{userName}@example.test",
+            EmailConfirmed = true,
+            DepartmentId = departmentId
+        };
+
+        var createResult = await userManager.CreateAsync(user, "P@ssw0rd_Test123!");
+        if (!createResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                string.Join(", ", createResult.Errors.Select(error => error.Description)));
+        }
+
+        var roleResult = await userManager.AddToRoleAsync(user, SystemRoles.HiringManager);
         if (!roleResult.Succeeded)
         {
             throw new InvalidOperationException(
