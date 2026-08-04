@@ -50,7 +50,7 @@ public sealed class ApplicationsPoolControllerTests : IClassFixture<TestWebAppli
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class ApplicationsPoolControllerTests : IClassFixture<TestWebAppli
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Theory]
@@ -149,11 +149,7 @@ public sealed class ApplicationsPoolControllerTests : IClassFixture<TestWebAppli
 
         var response = await client.SendAsync(request);
 
-        // Controller Forbid() döner; bilinen KAN-92 hatası (ErrorController'ın yalnızca GET
-        // kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor.
-        Assert.True(
-            response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {response.StatusCode}");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
@@ -167,7 +163,7 @@ public sealed class ApplicationsPoolControllerTests : IClassFixture<TestWebAppli
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]

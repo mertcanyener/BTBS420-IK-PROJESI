@@ -383,7 +383,7 @@ public sealed class JobPostingSqlServerIntegrationTests :
             SystemRoles.RecruitmentSpecialist,
             otherRecruiterId);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         await using var context = CreateRawContext();
         var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);
@@ -410,7 +410,7 @@ public sealed class JobPostingSqlServerIntegrationTests :
             SystemRoles.HiringManager,
             managerId);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         await using var context = CreateRawContext();
         var jobPosting = await context.JobPostings.SingleAsync(j => j.Id == jobPostingId);

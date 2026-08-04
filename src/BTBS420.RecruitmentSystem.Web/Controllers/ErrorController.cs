@@ -7,7 +7,7 @@ namespace BTBS420.RecruitmentSystem.Web.Controllers;
 [ApiExplorerSettings(IgnoreApi = true)]
 public sealed class ErrorController : Controller
 {
-    [HttpGet("Error/{statusCode:int}")]
+    [Route("Error/{statusCode:int}")]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult StatusCodePage(int statusCode)
     {

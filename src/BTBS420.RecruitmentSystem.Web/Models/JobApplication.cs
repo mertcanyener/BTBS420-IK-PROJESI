@@ -30,15 +30,40 @@ public sealed class JobApplication
 
     public DateTime? WithdrawnAtUtc { get; private set; }
 
-    internal void Withdraw(DateTime withdrawnAtUtc)
+    public byte[] RowVersion { get; private set; } = [];
+
+    internal JobApplicationStatusChange Withdraw(string actorUserId, DateTime withdrawnAtUtc)
     {
-        if (!ApplicationStatuses.CanWithdraw(Status))
+        return TransitionTo(ApplicationStatuses.Withdrawn, actorUserId, reason: null, withdrawnAtUtc);
+    }
+
+    internal JobApplicationStatusChange TransitionTo(
+        string newStatus,
+        string actorUserId,
+        string? reason,
+        DateTime changedAtUtc)
+    {
+        if (!ApplicationStatuses.IsValidTransition(Status, newStatus))
         {
             throw new InvalidOperationException(
-                $"'{ApplicationStatuses.GetDisplayLabel(Status)}' durumundaki bir başvuru geri çekilemez.");
+                $"'{ApplicationStatuses.GetDisplayLabel(Status)}' durumundaki bir başvuru " +
+                $"'{ApplicationStatuses.GetDisplayLabel(newStatus)}' durumuna geçemez.");
         }
 
-        Status = ApplicationStatuses.Withdrawn;
-        WithdrawnAtUtc = withdrawnAtUtc;
+        var change = new JobApplicationStatusChange(
+            Id,
+            Status,
+            newStatus,
+            actorUserId,
+            reason,
+            changedAtUtc);
+
+        Status = newStatus;
+        if (newStatus == ApplicationStatuses.Withdrawn)
+        {
+            WithdrawnAtUtc = changedAtUtc;
+        }
+
+        return change;
     }
 }

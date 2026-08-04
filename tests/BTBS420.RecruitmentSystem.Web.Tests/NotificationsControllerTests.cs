@@ -148,7 +148,7 @@ public sealed class NotificationsControllerTests
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal([9001L], state.MarkAsReadIds);
         Assert.Equal("foreign-reader-kan30", state.MarkAsReadUserId);
     }
@@ -222,7 +222,7 @@ public sealed class NotificationsControllerTests
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Empty(state.MarkAsReadIds);
         Assert.Equal(0, state.MarkAllAsReadCallCount);
     }

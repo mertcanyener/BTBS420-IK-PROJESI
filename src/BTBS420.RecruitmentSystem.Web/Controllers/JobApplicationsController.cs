@@ -31,6 +31,9 @@ public sealed class JobApplicationsController(
 
     private const string WithdrawSucceededMessage = "Başvurunuz geri çekildi.";
 
+    private const string ConcurrencyConflictMessage =
+        "Başvurunuz siz işlem yaparken başka bir işlemle güncellendi, lütfen tekrar deneyin.";
+
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
@@ -98,15 +101,20 @@ public sealed class JobApplicationsController(
             return NotFound();
         }
 
+        JobApplicationStatusChange statusChange;
         try
         {
-            application.Withdraw(timeProvider.GetUtcNow().UtcDateTime);
+            statusChange = application.Withdraw(
+                profile.ApplicationUserId,
+                timeProvider.GetUtcNow().UtcDateTime);
         }
         catch (InvalidOperationException exception)
         {
             TempData["StatusMessage"] = exception.Message;
             return RedirectToAction(nameof(Index));
         }
+
+        dbContext.JobApplicationStatusChanges.Add(statusChange);
 
         activityLogService.Stage(
             new ActivityLogEntry(
@@ -116,7 +124,16 @@ public sealed class JobApplicationsController(
                 application.Id.ToString(),
                 JobPostingId: application.JobPostingId.ToString(),
                 CandidateId: profile.ApplicationUserId));
-        await dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = ConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Index));
+        }
 
         TempData["StatusMessage"] = WithdrawSucceededMessage;
         return RedirectToAction(nameof(Index));

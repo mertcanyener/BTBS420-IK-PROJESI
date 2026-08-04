@@ -58,6 +58,43 @@ public sealed class Interview
         Location = NormalizeLocation(InterviewType, location);
     }
 
+    internal void Postpone(DateTime newStartAtUtc, DateTime newEndAtUtc)
+    {
+        EnsureValidTransition(Status);
+        (StartAtUtc, EndAtUtc) = ValidateTimeRange(newStartAtUtc, newEndAtUtc);
+    }
+
+    internal void Complete()
+    {
+        TransitionTo(InterviewStatuses.Completed);
+    }
+
+    internal void Cancel()
+    {
+        TransitionTo(InterviewStatuses.Cancelled);
+    }
+
+    private void TransitionTo(string newStatus)
+    {
+        if (!InterviewStatuses.IsValidTransition(Status, newStatus))
+        {
+            throw new InvalidOperationException(
+                $"'{InterviewStatuses.GetDisplayLabel(Status)}' durumundaki bir mülakat " +
+                $"'{InterviewStatuses.GetDisplayLabel(newStatus)}' durumuna geçemez.");
+        }
+
+        Status = newStatus;
+    }
+
+    private static void EnsureValidTransition(string currentStatus)
+    {
+        if (currentStatus != InterviewStatuses.Scheduled)
+        {
+            throw new InvalidOperationException(
+                $"'{InterviewStatuses.GetDisplayLabel(currentStatus)}' durumundaki bir mülakat ertelenemez.");
+        }
+    }
+
     private static string NormalizeInterviewType(string interviewType)
     {
         if (!InterviewTypes.IsDefined(interviewType))

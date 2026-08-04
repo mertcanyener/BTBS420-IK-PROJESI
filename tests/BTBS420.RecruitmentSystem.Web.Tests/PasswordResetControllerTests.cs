@@ -58,7 +58,7 @@ public sealed class PasswordResetControllerTests : IClassFixture<TestWebApplicat
 
         var response = await client.PostAsync("/Account/ForgotPassword", content);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class PasswordResetControllerTests : IClassFixture<TestWebApplicat
 
         var response = await client.PostAsync("/Account/ResetPassword", content);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]

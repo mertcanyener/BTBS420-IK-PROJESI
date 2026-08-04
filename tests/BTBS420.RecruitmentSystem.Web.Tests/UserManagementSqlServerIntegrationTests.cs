@@ -266,11 +266,7 @@ public sealed class UserManagementSqlServerIntegrationTests :
             SystemRoles.Admin,
             departmentId);
 
-        // NotFound(404), UseStatusCodePagesWithReExecute tarafından POST metodu
-        // korunarak /Error/404'e yönlendirilir; ErrorController o rotayı yalnızca
-        // [HttpGet] olarak tanımladığından sonuç 405 olarak gözlemlenir
-        // (KAN-31'den beri bilinen ve tüm POST/NotFound testlerinde kabul edilen davranış).
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private WebApplicationFactory<Program> CreateSqlFactory()

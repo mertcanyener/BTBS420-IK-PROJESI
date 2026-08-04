@@ -30,6 +30,18 @@ public sealed class InterviewsController(
 
     private const string InterviewUpdatedMessage = "Mülakat güncellendi.";
 
+    private const string InterviewCompletedMessage = "Mülakat tamamlandı olarak işaretlendi.";
+
+    private const string InterviewCancelledMessage = "Mülakat iptal edildi.";
+
+    private const string InterviewPostponedMessage = "Mülakat ertelendi.";
+
+    private const string PostponeRequiresNewTimeMessage =
+        "Erteleme için yeni başlangıç ve bitiş zamanı zorunludur.";
+
+    private const string StatusChangeConcurrencyConflictMessage =
+        "Bu mülakat sizden önce başka biri tarafından güncellendi, lütfen sayfayı yenileyip tekrar deneyin.";
+
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
@@ -235,38 +247,15 @@ public sealed class InterviewsController(
 
         try
         {
-            var participantIds = await dbContext.InterviewParticipants
-                .Where(participant => participant.InterviewId == interview.Id)
-                .Select(participant => participant.ParticipantUserId)
-                .ToListAsync(cancellationToken);
+            var conflictingUserNames = await FindConflictingParticipantUserNamesAsync(
+                interview,
+                interview.StartAtUtc,
+                interview.EndAtUtc,
+                cancellationToken);
 
-            var conflictingUserIds = new List<string>();
-            foreach (var participantId in participantIds)
-            {
-                var hasConflict = await dbContext.InterviewParticipants
-                    .Where(
-                        participant =>
-                            participant.ParticipantUserId == participantId &&
-                            participant.InterviewId != interview.Id &&
-                            participant.Interview.Status != InterviewStatuses.Cancelled &&
-                            participant.Interview.StartAtUtc < interview.EndAtUtc &&
-                            participant.Interview.EndAtUtc > interview.StartAtUtc)
-                    .AnyAsync(cancellationToken);
-
-                if (hasConflict)
-                {
-                    conflictingUserIds.Add(participantId);
-                }
-            }
-
-            if (conflictingUserIds.Count > 0)
+            if (conflictingUserNames.Count > 0)
             {
                 await transaction.RollbackAsync(cancellationToken);
-
-                var conflictingUserNames = await dbContext.Users
-                    .Where(user => conflictingUserIds.Contains(user.Id))
-                    .Select(user => user.UserName)
-                    .ToListAsync(cancellationToken);
 
                 ModelState.AddModelError(
                     string.Empty,
@@ -302,6 +291,213 @@ public sealed class InterviewsController(
 
         TempData["StatusMessage"] = InterviewUpdatedMessage;
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Complete(int id, CancellationToken cancellationToken)
+    {
+        var interview = await LoadInterviewWithScopeAsync(id, cancellationToken);
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            interview.Complete();
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                InterviewCompletedMessage,
+                ActivityEntityTypes.Interview,
+                interview.Id.ToString(),
+                JobPostingId: interview.JobApplication.JobPostingId.ToString(),
+                CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = InterviewCompletedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(int id, CancellationToken cancellationToken)
+    {
+        var interview = await LoadInterviewWithScopeAsync(id, cancellationToken);
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            interview.Cancel();
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                InterviewCancelledMessage,
+                ActivityEntityTypes.Interview,
+                interview.Id.ToString(),
+                JobPostingId: interview.JobApplication.JobPostingId.ToString(),
+                CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = InterviewCancelledMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.RecruitmentSpecialist}")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Postpone(
+        int id,
+        DateTime? newStartAtUtc,
+        DateTime? newEndAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var interview = await LoadInterviewWithScopeAsync(id, cancellationToken);
+        if (interview is null)
+        {
+            return NotFound();
+        }
+
+        if (newStartAtUtc is null || newEndAtUtc is null)
+        {
+            TempData["StatusMessage"] = PostponeRequiresNewTimeMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        try
+        {
+            var conflictingUserNames = await FindConflictingParticipantUserNamesAsync(
+                interview,
+                newStartAtUtc.Value,
+                newEndAtUtc.Value,
+                cancellationToken);
+
+            if (conflictingUserNames.Count > 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["StatusMessage"] =
+                    $"Yeni zaman aralığı şu katılımcılarla çakışıyor: {string.Join(", ", conflictingUserNames)}";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            interview.Postpone(newStartAtUtc.Value, newEndAtUtc.Value);
+
+            activityLogService.Stage(
+                new ActivityLogEntry(
+                    ActivityActionCodes.EntityStatusChanged,
+                    InterviewPostponedMessage,
+                    ActivityEntityTypes.Interview,
+                    interview.Id.ToString(),
+                    JobPostingId: interview.JobApplication.JobPostingId.ToString(),
+                    CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (Exception exception) when (exception is DbUpdateException or SqlException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["StatusMessage"] = OperationFailedMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = InterviewPostponedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private async Task<IReadOnlyList<string>> FindConflictingParticipantUserNamesAsync(
+        Interview interview,
+        DateTime newStartAtUtc,
+        DateTime newEndAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var participantIds = await dbContext.InterviewParticipants
+            .Where(participant => participant.InterviewId == interview.Id)
+            .Select(participant => participant.ParticipantUserId)
+            .ToListAsync(cancellationToken);
+
+        var conflictingUserIds = new List<string>();
+        foreach (var participantId in participantIds)
+        {
+            var hasConflict = await dbContext.InterviewParticipants
+                .Where(
+                    participant =>
+                        participant.ParticipantUserId == participantId &&
+                        participant.InterviewId != interview.Id &&
+                        participant.Interview.Status != InterviewStatuses.Cancelled &&
+                        participant.Interview.StartAtUtc < newEndAtUtc &&
+                        participant.Interview.EndAtUtc > newStartAtUtc)
+                .AnyAsync(cancellationToken);
+
+            if (hasConflict)
+            {
+                conflictingUserIds.Add(participantId);
+            }
+        }
+
+        if (conflictingUserIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await dbContext.Users
+            .Where(user => conflictingUserIds.Contains(user.Id))
+            .Select(user => user.UserName!)
+            .ToListAsync(cancellationToken);
     }
 
     private async Task<IActionResult> HandleConcurrencyConflictAsync(

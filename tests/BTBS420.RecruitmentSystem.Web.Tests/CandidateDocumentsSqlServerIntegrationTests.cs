@@ -168,12 +168,7 @@ public sealed class CandidateDocumentsSqlServerIntegrationTests :
 
         var deleteResponse = await bClient.SendAsync(deleteRequest);
 
-        // Controller NotFound() döner; bilinen KAN-92 hatası (ErrorController'ın yalnızca
-        // GET kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor. Asıl güvenlik
-        // kontrolü aşağıdaki "kayıt hâlâ var" doğrulaması.
-        Assert.True(
-            deleteResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {deleteResponse.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
 
         var stillExists = await context.CandidateDocuments.AnyAsync(d => d.Id == documentId);
         Assert.True(stillExists);
@@ -258,56 +253,13 @@ public sealed class CandidateDocumentsSqlServerIntegrationTests :
 
         var downloadResponse = await bClient.SendAsync(downloadRequest);
 
-        Assert.True(
-            downloadResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {downloadResponse.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, downloadResponse.StatusCode);
     }
 
-    [SqlServerIntegrationFact]
-    public async Task StaffDownload_YetkiliPersonelHerhangiBirAdayinBelgesiniIndirebilir()
-    {
-        using var factory = CreateSqlFactory();
-        var runId = Guid.NewGuid().ToString("N");
-        var candidateId = $"kan47-staffdl-{runId}";
-        await CreateCandidateUserAsync(candidateId);
-        using var client = CreateClient(factory);
-        var profileId = await CreateCandidateProfileAsync(client, candidateId);
-
-        await UploadAsync(
-            client,
-            candidateId,
-            CandidateDocumentTypes.Certificate,
-            "sertifika.pdf",
-            "application/pdf",
-            ValidPdfBytes);
-
-        await using var context = CreateRawContext();
-        var documentId = (await context.CandidateDocuments
-            .SingleAsync(d => d.CandidateProfileId == profileId)).Id;
-
-        using var staffClient = CreateClient(factory);
-        using var downloadRequest = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"/StaffCandidateDocuments/Download/{documentId}");
-        downloadRequest.Headers.Add(
-            TestAuthenticationHandler.RoleHeaderName,
-            SystemRoles.RecruitmentSpecialist);
-
-        var downloadResponse = await staffClient.SendAsync(downloadRequest);
-
-        Assert.Equal(HttpStatusCode.OK, downloadResponse.StatusCode);
-        var downloadedBytes = await downloadResponse.Content.ReadAsByteArrayAsync();
-        Assert.Equal(ValidPdfBytes, downloadedBytes);
-
-        var log = await context.ActivityLogs
-            .Where(
-                l =>
-                    l.ActionCode == ActivityActionCodes.EntityDownloaded &&
-                    l.TargetEntityType == ActivityEntityTypes.CandidateDocument &&
-                    l.TargetEntityId == documentId.ToString())
-            .ToListAsync();
-        Assert.Contains(log, l => l.CandidateId == candidateId);
-    }
+    // Not: "yetkili personel herhangi bir adayın belgesini indirebilir" senaryosu
+    // (adayın hiçbir başvurusu olmadan) KAN-94 ile kapsam dışı bırakıldı — bkz.
+    // StaffCandidateDocumentsSqlServerIntegrationTests (kapsam içi/dışı senaryolar,
+    // başvurulu aday üzerinden doğru şekilde test ediliyor).
 
     private static async Task CreateCandidateUserAsync(string candidateId)
     {

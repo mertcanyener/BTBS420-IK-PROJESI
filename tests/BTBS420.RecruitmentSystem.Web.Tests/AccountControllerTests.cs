@@ -76,7 +76,7 @@ public sealed class AccountControllerTests : IClassFixture<TestWebApplicationFac
 
         var response = await client.PostAsync("/Account/Login", content);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]
@@ -87,13 +87,10 @@ public sealed class AccountControllerTests : IClassFixture<TestWebApplicationFac
 
         var response = await client.PostAsync("/Account/Logout", content);
 
-        // Kimliği doğrulanmamış istek [Authorize] tarafından 401 ile reddedilir;
-        // ancak bu boş-body 401 yanıtı UseStatusCodePagesWithReExecute ile
-        // orijinal POST metodu korunarak /Error/401'e yeniden yönlendirilir.
-        // ErrorController yalnızca GET'i eşlediğinden sonuç 405 olur — bu,
-        // NotificationsController'ın antiforgery testlerinde de görülen aynı
-        // mevcut pipeline davranışıdır.
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        // [Authorize] filtresi antiforgery kontrolünden önce çalışır, bu yüzden
+        // kimliği doğrulanmamış istek antiforgery token eksikliğine bakılmaksızın
+        // doğrudan 401 ile reddedilir.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

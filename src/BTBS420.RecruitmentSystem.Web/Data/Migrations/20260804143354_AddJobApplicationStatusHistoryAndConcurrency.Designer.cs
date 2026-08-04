@@ -4,6 +4,7 @@ using BTBS420.RecruitmentSystem.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BTBS420.RecruitmentSystem.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260804143354_AddJobApplicationStatusHistoryAndConcurrency")]
+    partial class AddJobApplicationStatusHistoryAndConcurrency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -524,56 +527,6 @@ namespace BTBS420.RecruitmentSystem.Web.Data.Migrations
                     b.HasIndex("JobApplicationId");
 
                     b.ToTable("Interviews", (string)null);
-                });
-
-            modelBuilder.Entity("BTBS420.RecruitmentSystem.Web.Models.InterviewEvaluation", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompetencyScore")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("EvaluatorUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("InterviewId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<int>("OverallScore")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Recommendation")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EvaluatorUserId");
-
-                    b.HasIndex("InterviewId", "EvaluatorUserId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_InterviewEvaluations_InterviewId_EvaluatorUserId");
-
-                    b.ToTable("InterviewEvaluations", (string)null);
                 });
 
             modelBuilder.Entity("BTBS420.RecruitmentSystem.Web.Models.InterviewParticipant", b =>
@@ -1247,23 +1200,6 @@ namespace BTBS420.RecruitmentSystem.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("JobApplication");
-                });
-
-            modelBuilder.Entity("BTBS420.RecruitmentSystem.Web.Models.InterviewEvaluation", b =>
-                {
-                    b.HasOne("BTBS420.RecruitmentSystem.Web.Models.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("EvaluatorUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BTBS420.RecruitmentSystem.Web.Models.Interview", "Interview")
-                        .WithMany()
-                        .HasForeignKey("InterviewId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Interview");
                 });
 
             modelBuilder.Entity("BTBS420.RecruitmentSystem.Web.Models.InterviewParticipant", b =>

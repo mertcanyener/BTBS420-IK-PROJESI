@@ -191,20 +191,38 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
             $"kan51-note-intruder-{runId}",
             departmentId);
 
+        // Yetkisiz personelin geçerli bir antiforgery token'ı olmadan gönderdiği istek
+        // zaten (antiforgery doğrulaması scope kontrolünden önce çalıştığı için) 500
+        // ile reddedilir; kapsam kontrolünü izole test edebilmek için önce bu kullanıcının
+        // erişebildiği kendi başvurusundan geçerli bir token alıyoruz.
         using var otherClient = CreateClient(factory);
+        var (ownJobPostingId, _, _) = await CreatePublishedJobPostingAsync(
+            otherClient,
+            factory,
+            $"{runId}-own",
+            otherRecruiterId);
+        var ownApplicationId = await CreateApplicationAsync(factory, otherClient, $"{runId}-own", ownJobPostingId);
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            otherClient,
+            $"/ApplicationsPool/Details/{ownApplicationId}",
+            SystemRoles.RecruitmentSpecialist,
+            otherRecruiterId);
+
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"/ApplicationsPool/AddNote/{applicationId}");
         request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.RecruitmentSpecialist);
         request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, otherRecruiterId);
         request.Content = new FormUrlEncodedContent(
-            new Dictionary<string, string> { ["body"] = "yetkisiz not" });
+            new Dictionary<string, string>
+            {
+                ["body"] = "yetkisiz not",
+                ["__RequestVerificationToken"] = token
+            });
 
         var response = await otherClient.SendAsync(request);
 
-        Assert.True(
-            response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {response.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
         await using var context = CreateRawContext();
         var count = await context.ApplicationNotes.CountAsync(n => n.JobApplicationId == applicationId);
@@ -468,9 +486,7 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
             onlineMeetingLink: "https://meet.example.test/kan54",
             location: null);
 
-        Assert.True(
-            response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {response.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
         await using var context = CreateRawContext();
         var count = await context.Interviews.CountAsync(i => i.JobApplicationId == applicationId);
@@ -968,7 +984,8 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
         CreatePublishedJobPostingAsync(
             HttpClient client,
             WebApplicationFactory<Program> factory,
-            string runId)
+            string runId,
+            string? existingResponsibleUserId = null)
     {
         var departmentId = await CreateDepartmentAsync(client, $"Kan51-Dept-{runId}");
 
@@ -991,8 +1008,10 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
         await using var context = CreateRawContext();
         var positionId = (await context.Positions.SingleAsync(p => p.Name == positionName)).Id;
 
-        var recruiterUserName = $"kan51-recruiter-{runId}";
-        var recruiterId = await CreateRecruiterUserAsync(factory, recruiterUserName, departmentId);
+        var recruiterId = existingResponsibleUserId ?? await CreateRecruiterUserAsync(
+            factory,
+            $"kan51-recruiter-{runId}",
+            departmentId);
 
         var jobPostingTitle = $"Kan51-Ilan-{runId}";
         var deadline = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));

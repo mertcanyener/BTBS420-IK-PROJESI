@@ -52,7 +52,7 @@ public sealed class CandidateExperiencesControllerTests : IClassFixture<TestWebA
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]

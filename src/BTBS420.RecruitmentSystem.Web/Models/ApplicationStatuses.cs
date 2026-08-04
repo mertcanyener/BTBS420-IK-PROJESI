@@ -13,9 +13,14 @@ public static class ApplicationStatuses
         new[] { New, Screening, Interview, Withdrawn }
             .ToFrozenSet(StringComparer.Ordinal);
 
-    private static readonly FrozenSet<string> WithdrawableStatuses =
-        new[] { New, Screening, Interview }
-            .ToFrozenSet(StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, FrozenSet<string>> AllowedTransitions =
+        new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
+        {
+            [New] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
+            [Screening] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
+            [Interview] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
+            [Withdrawn] = FrozenSet<string>.Empty
+        };
 
     public static IReadOnlySet<string> All => DefinedStatuses;
 
@@ -24,9 +29,15 @@ public static class ApplicationStatuses
         return DefinedStatuses.Contains(status);
     }
 
+    public static bool IsValidTransition(string fromStatus, string toStatus)
+    {
+        return AllowedTransitions.TryGetValue(fromStatus, out var allowedTargets) &&
+            allowedTargets.Contains(toStatus);
+    }
+
     public static bool CanWithdraw(string status)
     {
-        return WithdrawableStatuses.Contains(status);
+        return IsValidTransition(status, Withdrawn);
     }
 
     public static string GetDisplayLabel(string status)

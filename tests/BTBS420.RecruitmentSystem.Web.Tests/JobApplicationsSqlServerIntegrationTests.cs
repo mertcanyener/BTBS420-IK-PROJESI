@@ -232,6 +232,70 @@ public sealed class JobApplicationsSqlServerIntegrationTests :
     }
 
     [SqlServerIntegrationFact]
+    public async Task Withdraw_DurumGecmisiKaydedilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan24-history-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var client = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(client, candidateId);
+        await ApplyAsync(client, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+
+        var response = await WithdrawAsync(client, candidateId, applicationId);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verificationContext = CreateRawContext();
+        var change = await verificationContext.JobApplicationStatusChanges
+            .SingleAsync(c => c.JobApplicationId == applicationId);
+        Assert.Equal(ApplicationStatuses.New, change.FromStatus);
+        Assert.Equal(ApplicationStatuses.Withdrawn, change.ToStatus);
+        Assert.Equal(candidateId, change.ActorUserId);
+        Assert.Null(change.Reason);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Withdraw_EszamanliCiftIstekTekGecmisKaydiUretir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan24-concurrency-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var profileClient = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(profileClient, candidateId);
+        await ApplyAsync(profileClient, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+
+        using var firstClient = CreateClient(factory);
+        using var secondClient = CreateClient(factory);
+
+        await Task.WhenAll(
+            WithdrawAsync(firstClient, candidateId, applicationId),
+            WithdrawAsync(secondClient, candidateId, applicationId));
+
+        await using var verificationContext = CreateRawContext();
+        var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Withdrawn, application.Status);
+
+        var historyCount = await verificationContext.JobApplicationStatusChanges
+            .CountAsync(c => c.JobApplicationId == applicationId);
+        Assert.Equal(1, historyCount);
+    }
+
+    [SqlServerIntegrationFact]
     public async Task Withdraw_GeriCekilmisBasvuruTekrarGeriCekilemez()
     {
         using var factory = CreateSqlFactory();
@@ -291,12 +355,7 @@ public sealed class JobApplicationsSqlServerIntegrationTests :
 
         var response = await WithdrawAsync(bClient, candidateBId, applicationId);
 
-        // Controller NotFound() döner; bilinen KAN-92 hatası (ErrorController'ın yalnızca
-        // GET kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor. Asıl güvenlik
-        // kontrolü aşağıdaki "durum değişmedi" doğrulaması.
-        Assert.True(
-            response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {response.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
         await using var verificationContext = CreateRawContext();
         var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);

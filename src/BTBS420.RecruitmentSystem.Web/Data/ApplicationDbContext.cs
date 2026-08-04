@@ -47,11 +47,16 @@ public sealed class ApplicationDbContext(
 
     public DbSet<JobApplication> JobApplications => Set<JobApplication>();
 
+    public DbSet<JobApplicationStatusChange> JobApplicationStatusChanges =>
+        Set<JobApplicationStatusChange>();
+
     public DbSet<ApplicationNote> ApplicationNotes => Set<ApplicationNote>();
 
     public DbSet<Interview> Interviews => Set<Interview>();
 
     public DbSet<InterviewParticipant> InterviewParticipants => Set<InterviewParticipant>();
+
+    public DbSet<InterviewEvaluation> InterviewEvaluations => Set<InterviewEvaluation>();
 
     public override int SaveChanges()
     {
@@ -61,6 +66,7 @@ public sealed class ApplicationDbContext(
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         EnsureActivityLogsAreAppendOnly();
+        EnsureJobApplicationStatusChangesAreAppendOnly();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -77,6 +83,7 @@ public sealed class ApplicationDbContext(
         CancellationToken cancellationToken = default)
     {
         EnsureActivityLogsAreAppendOnly();
+        EnsureJobApplicationStatusChangesAreAppendOnly();
         return base.SaveChangesAsync(
             acceptAllChangesOnSuccess,
             cancellationToken);
@@ -122,9 +129,11 @@ public sealed class ApplicationDbContext(
         builder.ApplyConfiguration(new CandidateExperienceConfiguration());
         builder.ApplyConfiguration(new CandidateDocumentConfiguration());
         builder.ApplyConfiguration(new JobApplicationConfiguration());
+        builder.ApplyConfiguration(new JobApplicationStatusChangeConfiguration());
         builder.ApplyConfiguration(new ApplicationNoteConfiguration());
         builder.ApplyConfiguration(new InterviewConfiguration());
         builder.ApplyConfiguration(new InterviewParticipantConfiguration());
+        builder.ApplyConfiguration(new InterviewEvaluationConfiguration());
     }
 
     private void EnsureActivityLogsAreAppendOnly()
@@ -138,6 +147,20 @@ public sealed class ApplicationDbContext(
         {
             throw new InvalidOperationException(
                 "Aktivite kayıtları yalnızca eklenebilir; güncellenemez veya silinemez.");
+        }
+    }
+
+    private void EnsureJobApplicationStatusChangesAreAppendOnly()
+    {
+        var mutatedStatusChange = ChangeTracker
+            .Entries<JobApplicationStatusChange>()
+            .FirstOrDefault(
+                entry => entry.State is EntityState.Modified or EntityState.Deleted);
+
+        if (mutatedStatusChange is not null)
+        {
+            throw new InvalidOperationException(
+                "Başvuru durum geçmişi yalnızca eklenebilir; güncellenemez veya silinemez.");
         }
     }
 }

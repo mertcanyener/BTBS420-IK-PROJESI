@@ -176,12 +176,7 @@ public sealed class CandidateEducationsSqlServerIntegrationTests :
 
         var editResponse = await bClient.SendAsync(editRequest);
 
-        // Controller returns NotFound(); bilinen KAN-92 hatası (ErrorController'ın yalnızca
-        // GET kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor. Buradaki asıl
-        // güvenlik kontrolü aşağıdaki "kayıt değişmedi" doğrulaması.
-        Assert.True(
-            editResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {editResponse.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, editResponse.StatusCode);
 
         var untouchedEducation = await context.CandidateEducations.SingleAsync(e => e.Id == educationRecordId);
         Assert.Equal("Aday A Üniversitesi", untouchedEducation.SchoolName);
@@ -229,12 +224,7 @@ public sealed class CandidateEducationsSqlServerIntegrationTests :
 
         var deleteResponse = await bClient.SendAsync(deleteRequest);
 
-        // Controller returns NotFound(); bilinen KAN-92 hatası (ErrorController'ın yalnızca
-        // GET kabul etmesi) bu body'siz yanıtı POST'larda 405'e çevirebiliyor. Buradaki asıl
-        // güvenlik kontrolü aşağıdaki "kayıt hâlâ var" doğrulaması.
-        Assert.True(
-            deleteResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Beklenmeyen durum kodu: {deleteResponse.StatusCode}");
+        Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
 
         var stillExists = await context.CandidateEducations.AnyAsync(e => e.Id == educationRecordId);
         Assert.True(stillExists);

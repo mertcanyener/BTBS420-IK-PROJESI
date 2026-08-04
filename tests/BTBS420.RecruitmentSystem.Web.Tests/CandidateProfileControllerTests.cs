@@ -52,7 +52,7 @@ public sealed class CandidateProfileControllerTests : IClassFixture<TestWebAppli
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]

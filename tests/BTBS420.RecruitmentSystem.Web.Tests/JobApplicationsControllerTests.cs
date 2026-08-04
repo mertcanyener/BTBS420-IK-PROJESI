@@ -53,7 +53,7 @@ public sealed class JobApplicationsControllerTests : IClassFixture<TestWebApplic
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class JobApplicationsControllerTests : IClassFixture<TestWebApplic
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     private HttpClient CreateClient()

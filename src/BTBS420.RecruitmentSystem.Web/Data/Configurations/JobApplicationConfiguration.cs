@@ -22,6 +22,9 @@ public sealed class JobApplicationConfiguration : IEntityTypeConfiguration<JobAp
             .HasDefaultValue(ApplicationStatuses.New)
             .IsRequired();
 
+        builder.Property(application => application.RowVersion)
+            .IsRowVersion();
+
         builder.HasOne(application => application.JobPosting)
             .WithMany()
             .HasForeignKey(application => application.JobPostingId)

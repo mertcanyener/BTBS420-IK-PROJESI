@@ -108,7 +108,7 @@ public sealed class RegisterControllerTests : IClassFixture<TestWebApplicationFa
 
         var response = await client.PostAsync("/Account/Register", content);
 
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     [Fact]

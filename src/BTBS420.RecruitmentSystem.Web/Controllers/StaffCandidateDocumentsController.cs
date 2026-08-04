@@ -5,6 +5,7 @@ using BTBS420.RecruitmentSystem.Web.Models;
 using BTBS420.RecruitmentSystem.Web.Storage;
 using BTBS420.RecruitmentSystem.Web.ViewModels.CandidateDocuments;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,7 @@ namespace BTBS420.RecruitmentSystem.Web.Controllers;
 [Authorize(Policy = AuthorizationPolicies.RecruitmentStaffOnly)]
 public sealed class StaffCandidateDocumentsController(
     ApplicationDbContext dbContext,
+    UserManager<ApplicationUser> userManager,
     IActivityLogService activityLogService,
     ICandidateDocumentStorageService storageService) : Controller
 {
@@ -23,6 +25,11 @@ public sealed class StaffCandidateDocumentsController(
             .FirstOrDefaultAsync(p => p.Id == candidateProfileId, cancellationToken);
 
         if (profile is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsCandidateWithinScopeAsync(candidateProfileId, cancellationToken))
         {
             return NotFound();
         }
@@ -70,6 +77,11 @@ public sealed class StaffCandidateDocumentsController(
             return NotFound();
         }
 
+        if (!await IsCandidateWithinScopeAsync(document.CandidateProfileId, cancellationToken))
+        {
+            return NotFound();
+        }
+
         activityLogService.Stage(
             new ActivityLogEntry(
                 ActivityActionCodes.EntityDownloaded,
@@ -81,5 +93,42 @@ public sealed class StaffCandidateDocumentsController(
 
         var stream = storageService.OpenRead(document.CandidateProfileId, document.StoredFileName);
         return File(stream, document.ContentType, document.OriginalFileName);
+    }
+
+    private async Task<bool> IsCandidateWithinScopeAsync(
+        int candidateProfileId,
+        CancellationToken cancellationToken)
+    {
+        if (User.IsInRole(SystemRoles.Admin))
+        {
+            return true;
+        }
+
+        var currentUser = await userManager.GetUserAsync(User);
+        if (currentUser is null)
+        {
+            return false;
+        }
+
+        var applications = dbContext.JobApplications
+            .Where(application => application.CandidateProfileId == candidateProfileId);
+
+        if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
+        {
+            return await applications.AnyAsync(
+                application => application.JobPosting.ResponsibleUserId == currentUser.Id,
+                cancellationToken);
+        }
+
+        if (User.IsInRole(SystemRoles.HiringManager))
+        {
+            return currentUser.DepartmentId is not null &&
+                await applications.AnyAsync(
+                    application =>
+                        application.JobPosting.Position.DepartmentId == currentUser.DepartmentId.Value,
+                    cancellationToken);
+        }
+
+        return false;
     }
 }
