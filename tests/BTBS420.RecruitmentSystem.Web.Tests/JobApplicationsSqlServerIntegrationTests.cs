@@ -5,11 +5,14 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BTBS420.RecruitmentSystem.Web.Tests;
 
@@ -229,6 +232,33 @@ public sealed class JobApplicationsSqlServerIntegrationTests :
         await using var verificationContext = CreateRawContext();
         var application = await verificationContext.JobApplications.SingleAsync(a => a.Id == applicationId);
         Assert.Equal(ApplicationStatuses.Withdrawn, application.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Withdraw_AdayinKendiEylemiBildirimUretmez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var jobPostingId = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan52-withdraw-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var client = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(client, candidateId);
+        await ApplyAsync(client, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications
+            .SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+
+        var response = await WithdrawAsync(client, candidateId, applicationId);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var verificationContext = CreateRawContext();
+        var notificationCount = await verificationContext.Notifications
+            .CountAsync(n => n.RecipientUserId == candidateId);
+        Assert.Equal(0, notificationCount);
     }
 
     [SqlServerIntegrationFact]
@@ -637,6 +667,12 @@ public sealed class JobApplicationsSqlServerIntegrationTests :
                     {
                         ["ConnectionStrings:DefaultConnection"] = connectionString
                     });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<INotificationPublisher>();
+                services.AddScoped<INotificationPublisher>(
+                    serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
             });
         });
     }

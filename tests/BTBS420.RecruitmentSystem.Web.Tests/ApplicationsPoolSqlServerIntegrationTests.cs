@@ -5,11 +5,14 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BTBS420.RecruitmentSystem.Web.Tests;
 
@@ -460,6 +463,333 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
     }
 
     [SqlServerIntegrationFact]
+    public async Task Reject_GecerliGecisBasariliVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using var setupContext = CreateRawContext();
+        await setupContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE JobApplications SET Status = {ApplicationStatuses.Screening} WHERE Id = {applicationId}");
+
+        using var specialistClient = CreateClient(factory);
+        var reason = $"Kan53-red-{runId}";
+        var response = await RejectAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, reason);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .Include(a => a.JobPosting)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Rejected, application.Status);
+
+        var change = await context.JobApplicationStatusChanges
+            .SingleAsync(c => c.JobApplicationId == applicationId);
+        Assert.Equal(ApplicationStatuses.Screening, change.FromStatus);
+        Assert.Equal(ApplicationStatuses.Rejected, change.ToStatus);
+        Assert.Equal(reason, change.Reason);
+        Assert.Equal(responsibleUserId, change.ActorUserId);
+
+        var log = await context.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.EntityStatusChanged &&
+                    l.TargetEntityType == ActivityEntityTypes.Application &&
+                    l.TargetEntityId == applicationId.ToString())
+            .FirstOrDefaultAsync();
+        Assert.NotNull(log);
+
+        var candidateUserId = application.CandidateProfile.ApplicationUserId;
+        var notification = await context.Notifications
+            .SingleOrDefaultAsync(n => n.RecipientUserId == candidateUserId);
+        Assert.NotNull(notification);
+        Assert.Contains(application.JobPosting.Title, notification.Message);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.Screening), notification.Message);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.Rejected), notification.Message);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reject_YeniBasvuruDogrudanReddedilemez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        using var specialistClient = CreateClient(factory);
+        var response = await RejectAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, "Gerekçe");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.New, application.Status);
+
+        var changeCount = await context.JobApplicationStatusChanges
+            .CountAsync(c => c.JobApplicationId == applicationId);
+        Assert.Equal(0, changeCount);
+
+        var notificationCount = await context.Notifications
+            .CountAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+        Assert.Equal(0, notificationCount);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reject_KapsamDisindakiUzmanReddedemezNotFoundDoner()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, _) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using var setupContext = CreateRawContext();
+        await setupContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE JobApplications SET Status = {ApplicationStatuses.Screening} WHERE Id = {applicationId}");
+
+        var otherRecruiterId = await CreateRecruiterUserAsync(
+            factory, $"kan53-reject-intruder-{runId}", departmentId);
+
+        using var otherClient = CreateClient(factory);
+        var (ownJobPostingId, _, _) = await CreatePublishedJobPostingAsync(
+            otherClient, factory, $"{runId}-own", otherRecruiterId);
+        var ownApplicationId = await CreateApplicationAsync(factory, otherClient, $"{runId}-own", ownJobPostingId);
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            otherClient,
+            $"/ApplicationsPool/Details/{ownApplicationId}",
+            SystemRoles.RecruitmentSpecialist,
+            otherRecruiterId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/ApplicationsPool/Reject/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.RecruitmentSpecialist);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, otherRecruiterId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["reason"] = "Yetkisiz red",
+                ["__RequestVerificationToken"] = token
+            });
+
+        var response = await otherClient.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Screening, application.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reevaluate_GecerliGecisBasariliVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        using var specialistClient = CreateClient(factory);
+        await RejectAsync(specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, null);
+        await using (var rejectContext = CreateRawContext())
+        {
+            await rejectContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE JobApplications SET Status = {ApplicationStatuses.Screening} WHERE Id = {applicationId}");
+            await rejectContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE JobApplications SET Status = {ApplicationStatuses.Rejected} WHERE Id = {applicationId}");
+        }
+
+        var reason = $"Kan53-yeniden-{runId}";
+        var response = await ReevaluateAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, reason);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .Include(a => a.JobPosting)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Screening, application.Status);
+
+        var change = await context.JobApplicationStatusChanges
+            .Where(c => c.JobApplicationId == applicationId && c.ToStatus == ApplicationStatuses.Screening)
+            .SingleAsync();
+        Assert.Equal(ApplicationStatuses.Rejected, change.FromStatus);
+        Assert.Equal(reason, change.Reason);
+
+        var notification = await context.Notifications
+            .Where(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId)
+            .OrderByDescending(n => n.Id)
+            .FirstOrDefaultAsync();
+        Assert.NotNull(notification);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.Rejected), notification.Message);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.Screening), notification.Message);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task RejectVeReevaluate_HerBasariliGecisAyriBildirimUretir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using (var setupContext = CreateRawContext())
+        {
+            await setupContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE JobApplications SET Status = {ApplicationStatuses.Screening} WHERE Id = {applicationId}");
+        }
+
+        using var specialistClient = CreateClient(factory);
+        await RejectAsync(specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, "İlk red");
+        await ReevaluateAsync(specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, "Yeniden değerlendir");
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+
+        var notificationCount = await context.Notifications
+            .CountAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+        Assert.Equal(2, notificationCount);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reevaluate_GerekcesizReddedilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using var setupContext = CreateRawContext();
+        await setupContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE JobApplications SET Status = {ApplicationStatuses.Rejected} WHERE Id = {applicationId}");
+
+        using var specialistClient = CreateClient(factory);
+        var response = await ReevaluateAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, string.Empty);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Rejected, application.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Archive_TerminalDurumdanBasariliVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using var setupContext = CreateRawContext();
+        await setupContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE JobApplications SET Status = {ApplicationStatuses.Rejected} WHERE Id = {applicationId}");
+
+        using var specialistClient = CreateClient(factory);
+        var response = await ArchiveAsync(specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.True(application.IsArchived);
+        Assert.NotNull(application.ArchivedAtUtc);
+        Assert.Equal(ApplicationStatuses.Rejected, application.Status);
+
+        var log = await context.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.EntityArchived &&
+                    l.TargetEntityType == ActivityEntityTypes.Application &&
+                    l.TargetEntityId == applicationId.ToString())
+            .FirstOrDefaultAsync();
+        Assert.NotNull(log);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Archive_AktifDurumdanReddedilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        using var specialistClient = CreateClient(factory);
+        var response = await ArchiveAsync(specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.False(application.IsArchived);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Reject_EszamanliIkiIstektenBiriKazanirTekGecmisKaydiUretir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using var setupContext = CreateRawContext();
+        await setupContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE JobApplications SET Status = {ApplicationStatuses.Screening} WHERE Id = {applicationId}");
+
+        using var client1 = CreateClient(factory);
+        using var client2 = CreateClient(factory);
+        var token1 = await GetAntiforgeryTokenForRoleAsync(
+            client1, $"/ApplicationsPool/Details/{applicationId}", SystemRoles.RecruitmentSpecialist, responsibleUserId);
+        var token2 = await GetAntiforgeryTokenForRoleAsync(
+            client2, $"/ApplicationsPool/Details/{applicationId}", SystemRoles.RecruitmentSpecialist, responsibleUserId);
+
+        var responses = await Task.WhenAll(
+            RejectWithTokenAsync(client1, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, "Birinci", token1),
+            RejectWithTokenAsync(client2, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, "İkinci", token2));
+
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.Redirect, response.StatusCode));
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Rejected, application.Status);
+
+        var winningChange = await context.JobApplicationStatusChanges
+            .SingleAsync(c => c.JobApplicationId == applicationId);
+
+        // Kaybeden istek DbUpdateConcurrencyException ile geri alındığı için ne bir
+        // JobApplicationStatusChange kaydı ne de bir bildirim bırakmamalı: adaya yalnızca
+        // kazanan geçişin EventKey'iyle eşleşen tek bir bildirim düşmeli.
+        var expectedEventKey =
+            $"application-status-changed:{applicationId}:{ApplicationStatuses.Rejected}:{winningChange.ChangedAtUtc.Ticks}";
+        var notifications = await context.Notifications
+            .Where(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId)
+            .ToListAsync();
+        Assert.Single(notifications);
+        Assert.Equal(expectedEventKey, notifications[0].EventKey);
+    }
+
+    [SqlServerIntegrationFact]
     public async Task CreateInterview_KapsamDisindakiUzmanOlusturamazNotFoundDoner()
     {
         using var factory = CreateSqlFactory();
@@ -813,6 +1143,81 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
         }
 
         request.Content = new FormUrlEncodedContent(formFields);
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> RejectAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int applicationId,
+        string? reason)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, $"/ApplicationsPool/Details/{applicationId}", role, userId);
+        return await RejectWithTokenAsync(client, role, userId, applicationId, reason, token);
+    }
+
+    private static async Task<HttpResponseMessage> RejectWithTokenAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int applicationId,
+        string? reason,
+        string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/ApplicationsPool/Reject/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+
+        var formFields = new Dictionary<string, string> { ["__RequestVerificationToken"] = token };
+        if (reason is not null)
+        {
+            formFields["reason"] = reason;
+        }
+
+        request.Content = new FormUrlEncodedContent(formFields);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> ReevaluateAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int applicationId,
+        string reason)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, $"/ApplicationsPool/Details/{applicationId}", role, userId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/ApplicationsPool/Reevaluate/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["reason"] = reason,
+                ["__RequestVerificationToken"] = token
+            });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> ArchiveAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int applicationId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, $"/ApplicationsPool/Details/{applicationId}", role, userId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/ApplicationsPool/Archive/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
 
         return await client.SendAsync(request);
     }
@@ -1173,6 +1578,12 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
                     {
                         ["ConnectionStrings:DefaultConnection"] = connectionString
                     });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<INotificationPublisher>();
+                services.AddScoped<INotificationPublisher>(
+                    serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
             });
         });
     }

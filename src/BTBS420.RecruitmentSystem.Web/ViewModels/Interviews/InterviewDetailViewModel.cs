@@ -13,4 +13,8 @@ public sealed record InterviewDetailViewModel(
     string? Location,
     string StatusLabel,
     IReadOnlyList<string> ParticipantNames,
-    bool CanEdit);
+    bool CanEdit,
+    bool CanViewEvaluationSummary,
+    IReadOnlyList<InterviewEvaluationSummaryItemViewModel> EvaluationSummary,
+    double? AverageCompetencyScore,
+    double? AverageOverallScore);

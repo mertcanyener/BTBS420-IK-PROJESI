@@ -32,9 +32,30 @@ public sealed class JobApplication
 
     public byte[] RowVersion { get; private set; } = [];
 
+    public bool IsArchived { get; private set; }
+
+    public DateTime? ArchivedAtUtc { get; private set; }
+
     internal JobApplicationStatusChange Withdraw(string actorUserId, DateTime withdrawnAtUtc)
     {
         return TransitionTo(ApplicationStatuses.Withdrawn, actorUserId, reason: null, withdrawnAtUtc);
+    }
+
+    internal void Archive(DateTime archivedAtUtc)
+    {
+        if (Status != ApplicationStatuses.Rejected && Status != ApplicationStatuses.Withdrawn)
+        {
+            throw new InvalidOperationException(
+                $"'{ApplicationStatuses.GetDisplayLabel(Status)}' durumundaki bir başvuru arşivlenemez.");
+        }
+
+        if (IsArchived)
+        {
+            throw new InvalidOperationException("Başvuru zaten arşivlenmiş.");
+        }
+
+        IsArchived = true;
+        ArchivedAtUtc = archivedAtUtc;
     }
 
     internal JobApplicationStatusChange TransitionTo(

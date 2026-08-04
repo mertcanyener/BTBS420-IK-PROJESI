@@ -8,17 +8,19 @@ public static class ApplicationStatuses
     public const string Screening = "screening";
     public const string Interview = "interview";
     public const string Withdrawn = "withdrawn";
+    public const string Rejected = "rejected";
 
     private static readonly FrozenSet<string> DefinedStatuses =
-        new[] { New, Screening, Interview, Withdrawn }
+        new[] { New, Screening, Interview, Withdrawn, Rejected }
             .ToFrozenSet(StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, FrozenSet<string>> AllowedTransitions =
         new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
         {
             [New] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
-            [Screening] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
-            [Interview] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
+            [Screening] = new[] { Withdrawn, Rejected }.ToFrozenSet(StringComparer.Ordinal),
+            [Interview] = new[] { Withdrawn, Rejected }.ToFrozenSet(StringComparer.Ordinal),
+            [Rejected] = new[] { Screening }.ToFrozenSet(StringComparer.Ordinal),
             [Withdrawn] = FrozenSet<string>.Empty
         };
 
@@ -48,6 +50,7 @@ public static class ApplicationStatuses
             Screening => "Ön Eleme",
             Interview => "Mülakat",
             Withdrawn => "Geri Çekildi",
+            Rejected => "Reddedildi",
             _ => status
         };
     }

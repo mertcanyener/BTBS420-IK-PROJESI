@@ -3,6 +3,7 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool;
 using BTBS420.RecruitmentSystem.Web.ViewModels.Interviews;
 using Microsoft.AspNetCore.Authorization;
@@ -17,7 +18,8 @@ namespace BTBS420.RecruitmentSystem.Web.Controllers;
 public sealed class InterviewsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
-    IActivityLogService activityLogService) : Controller
+    IActivityLogService activityLogService,
+    INotificationPublisher notificationPublisher) : Controller
 {
     private const string OperationFailedMessage = "İşlem tamamlanamadı, lütfen tekrar deneyin.";
 
@@ -133,6 +135,46 @@ public sealed class InterviewsController(
             .ToListAsync(cancellationToken);
 
         var canEdit = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+        var canViewEvaluationSummary = !User.IsInRole(SystemRoles.Candidate);
+
+        IReadOnlyList<InterviewEvaluationSummaryItemViewModel> evaluationSummary = [];
+        double? averageCompetencyScore = null;
+        double? averageOverallScore = null;
+
+        if (canViewEvaluationSummary)
+        {
+            var evaluations = await dbContext.InterviewEvaluations
+                .Where(evaluation => evaluation.InterviewId == interview.Id)
+                .Join(
+                    dbContext.Users,
+                    evaluation => evaluation.EvaluatorUserId,
+                    user => user.Id,
+                    (evaluation, user) => new
+                    {
+                        EvaluatorName = user.UserName,
+                        evaluation.Note,
+                        evaluation.CompetencyScore,
+                        evaluation.OverallScore,
+                        evaluation.Recommendation
+                    })
+                .ToListAsync(cancellationToken);
+
+            evaluationSummary = evaluations
+                .Select(
+                    evaluation => new InterviewEvaluationSummaryItemViewModel(
+                        evaluation.EvaluatorName ?? string.Empty,
+                        evaluation.Note,
+                        evaluation.CompetencyScore,
+                        evaluation.OverallScore,
+                        InterviewEvaluationRecommendations.GetDisplayLabel(evaluation.Recommendation)))
+                .ToList();
+
+            if (evaluations.Count > 0)
+            {
+                averageCompetencyScore = evaluations.Average(evaluation => evaluation.CompetencyScore);
+                averageOverallScore = evaluations.Average(evaluation => evaluation.OverallScore);
+            }
+        }
 
         var model = new InterviewDetailViewModel(
             interview.Id,
@@ -147,7 +189,11 @@ public sealed class InterviewsController(
             interview.Location,
             InterviewStatuses.GetDisplayLabel(interview.Status),
             participantNames.Select(name => name ?? string.Empty).ToList(),
-            canEdit);
+            canEdit,
+            canViewEvaluationSummary,
+            evaluationSummary,
+            averageCompetencyScore,
+            averageOverallScore);
 
         return View(model);
     }
@@ -367,6 +413,15 @@ public sealed class InterviewsController(
                 JobPostingId: interview.JobApplication.JobPostingId.ToString(),
                 CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
 
+        var cancelRecipients = await GetInterviewNotificationRecipientsAsync(
+            interview.JobApplication.CandidateProfile.ApplicationUserId, interview.Id, cancellationToken);
+        await StageInterviewNotificationAsync(
+            cancelRecipients,
+            $"interview-cancelled:{interview.Id}",
+            "Mülakat iptal edildi",
+            $"{interview.StartAtUtc:dd.MM.yyyy HH:mm} tarihli mülakatınız iptal edildi.",
+            cancellationToken);
+
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -433,6 +488,15 @@ public sealed class InterviewsController(
                     JobPostingId: interview.JobApplication.JobPostingId.ToString(),
                     CandidateId: interview.JobApplication.CandidateProfile.ApplicationUserId));
 
+            var postponeRecipients = await GetInterviewNotificationRecipientsAsync(
+                interview.JobApplication.CandidateProfile.ApplicationUserId, interview.Id, cancellationToken);
+            await StageInterviewNotificationAsync(
+                postponeRecipients,
+                $"interview-postponed:{interview.Id}:{newStartAtUtc.Value.Ticks}",
+                "Mülakat ertelendi",
+                $"Mülakatınızın yeni zamanı {newStartAtUtc.Value:dd.MM.yyyy HH:mm} olarak güncellendi.",
+                cancellationToken);
+
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -498,6 +562,37 @@ public sealed class InterviewsController(
             .Where(user => conflictingUserIds.Contains(user.Id))
             .Select(user => user.UserName!)
             .ToListAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<string>> GetInterviewNotificationRecipientsAsync(
+        string candidateUserId,
+        int interviewId,
+        CancellationToken cancellationToken)
+    {
+        var participantIds = await dbContext.InterviewParticipants
+            .Where(participant => participant.InterviewId == interviewId)
+            .Select(participant => participant.ParticipantUserId)
+            .ToListAsync(cancellationToken);
+
+        var recipients = new List<string> { candidateUserId };
+        recipients.AddRange(participantIds);
+
+        return recipients.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private async Task StageInterviewNotificationAsync(
+        IEnumerable<string> recipientUserIds,
+        string eventKey,
+        string title,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        foreach (var recipientUserId in recipientUserIds)
+        {
+            await notificationPublisher.StageIfMissingAsync(
+                new NotificationEntry(recipientUserId, eventKey, title, message),
+                cancellationToken);
+        }
     }
 
     private async Task<IActionResult> HandleConcurrencyConflictAsync(

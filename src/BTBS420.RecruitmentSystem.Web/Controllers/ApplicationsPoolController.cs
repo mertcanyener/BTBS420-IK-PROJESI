@@ -3,6 +3,7 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using BTBS420.RecruitmentSystem.Web.Storage;
 using BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool;
 using Microsoft.AspNetCore.Authorization;
@@ -18,6 +19,7 @@ public sealed class ApplicationsPoolController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     IActivityLogService activityLogService,
+    INotificationPublisher notificationPublisher,
     ICandidateDocumentStorageService storageService,
     TimeProvider timeProvider) : Controller
 {
@@ -35,6 +37,18 @@ public sealed class ApplicationsPoolController(
     private const string ParticipantsAssignedMessage = "Katılımcılar atandı.";
 
     private const string OperationFailedMessage = "İşlem tamamlanamadı, lütfen tekrar deneyin.";
+
+    private const string ApplicationRejectedMessage = "Başvuru reddedildi.";
+
+    private const string ApplicationReevaluatedMessage = "Başvuru yeniden değerlendirmeye alındı.";
+
+    private const string ApplicationArchivedMessage = "Başvuru arşivlendi.";
+
+    private const string ReevaluateReasonRequiredMessage =
+        "Yeniden değerlendirme için bir gerekçe belirtmelisiniz.";
+
+    private const string StatusChangeConcurrencyConflictMessage =
+        "Bu başvuru siz işlem yaparken başka biri tarafından güncellendi, lütfen tekrar deneyin.";
 
     private static readonly string[] InternalRoleNames =
     [
@@ -181,6 +195,201 @@ public sealed class ApplicationsPoolController(
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reject(int id, string? reason, CancellationToken cancellationToken)
+    {
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        JobApplicationStatusChange statusChange;
+        try
+        {
+            statusChange = application.TransitionTo(
+                ApplicationStatuses.Rejected,
+                actorUserId,
+                reason,
+                timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        dbContext.JobApplicationStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Personel başvuruyu reddetti.",
+                ActivityEntityTypes.Application,
+                application.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: application.CandidateProfile.ApplicationUserId));
+
+        await StageStatusChangeNotificationAsync(application, statusChange, cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = ApplicationRejectedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reevaluate(int id, string reason, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["StatusMessage"] = ReevaluateReasonRequiredMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        JobApplicationStatusChange statusChange;
+        try
+        {
+            statusChange = application.TransitionTo(
+                ApplicationStatuses.Screening,
+                actorUserId,
+                reason,
+                timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        dbContext.JobApplicationStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Personel reddedilmiş başvuruyu yeniden değerlendirmeye aldı.",
+                ActivityEntityTypes.Application,
+                application.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: application.CandidateProfile.ApplicationUserId));
+
+        await StageStatusChangeNotificationAsync(application, statusChange, cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = ApplicationReevaluatedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Archive(int id, CancellationToken cancellationToken)
+    {
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            application.Archive(timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityArchived,
+                "Personel başvuruyu arşivledi.",
+                ActivityEntityTypes.Application,
+                application.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: application.CandidateProfile.ApplicationUserId));
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = ApplicationArchivedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpGet]
     public async Task<IActionResult> DownloadDocument(
         int id,
@@ -311,6 +520,17 @@ public sealed class ApplicationsPoolController(
                 interview.Id.ToString(),
                 JobPostingId: application.JobPostingId.ToString(),
                 CandidateId: application.CandidateProfile.ApplicationUserId));
+
+        var recipients = await GetInterviewNotificationRecipientsAsync(
+            application.CandidateProfile.ApplicationUserId, interview.Id, cancellationToken);
+        await StageInterviewNotificationAsync(
+            recipients,
+            $"interview-created:{interview.Id}:{interview.StartAtUtc.Ticks}",
+            "Mülakat planlandı",
+            $"{InterviewTypes.GetDisplayLabel(interview.InterviewType)} türünde mülakatınız " +
+            $"{interview.StartAtUtc:dd.MM.yyyy HH:mm} tarihine planlandı.",
+            cancellationToken);
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
         TempData["StatusMessage"] = InterviewScheduledMessage;
@@ -452,6 +672,58 @@ public sealed class ApplicationsPoolController(
             .Select(type => new InterviewTypeOptionViewModel(type, InterviewTypes.GetDisplayLabel(type)))
             .OrderBy(option => option.Label, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private Task StageStatusChangeNotificationAsync(
+        JobApplication application,
+        JobApplicationStatusChange statusChange,
+        CancellationToken cancellationToken)
+    {
+        var eventKey =
+            $"application-status-changed:{application.Id}:{statusChange.ToStatus}:{statusChange.ChangedAtUtc.Ticks}";
+        var message =
+            $"\"{application.JobPosting.Title}\" ilanı için başvurunuz " +
+            $"\"{ApplicationStatuses.GetDisplayLabel(statusChange.FromStatus)}\" durumundan " +
+            $"\"{ApplicationStatuses.GetDisplayLabel(statusChange.ToStatus)}\" durumuna güncellendi.";
+
+        return notificationPublisher.StageIfMissingAsync(
+            new NotificationEntry(
+                application.CandidateProfile.ApplicationUserId,
+                eventKey,
+                "Başvuru durumunuz güncellendi",
+                message),
+            cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<string>> GetInterviewNotificationRecipientsAsync(
+        string candidateUserId,
+        int interviewId,
+        CancellationToken cancellationToken)
+    {
+        var participantIds = await dbContext.InterviewParticipants
+            .Where(participant => participant.InterviewId == interviewId)
+            .Select(participant => participant.ParticipantUserId)
+            .ToListAsync(cancellationToken);
+
+        var recipients = new List<string> { candidateUserId };
+        recipients.AddRange(participantIds);
+
+        return recipients.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private async Task StageInterviewNotificationAsync(
+        IEnumerable<string> recipientUserIds,
+        string eventKey,
+        string title,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        foreach (var recipientUserId in recipientUserIds)
+        {
+            await notificationPublisher.StageIfMissingAsync(
+                new NotificationEntry(recipientUserId, eventKey, title, message),
+                cancellationToken);
+        }
     }
 
     private async Task<bool> IsAuthorizedForApplicationAsync(JobPosting jobPosting)

@@ -4,11 +4,14 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BTBS420.RecruitmentSystem.Web.Tests;
 
@@ -522,6 +525,280 @@ public sealed class InterviewsSqlServerIntegrationTests : IClassFixture<TestWebA
         Assert.True(interview.StartAtUtc == newStart1 || interview.StartAtUtc == newStart2);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Details_YetkiliPersonelDegerlendirmeOzetiniGorur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan60", null);
+
+        var panelistAId = await CreateRecruiterUserAsync(factory, $"kan60-panelA-{runId}", departmentId);
+        var panelistBId = await CreateRecruiterUserAsync(factory, $"kan60-panelB-{runId}", departmentId);
+        await AssignParticipantsAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, interviewId,
+            [panelistAId, panelistBId]);
+
+        using var panelClientA = CreateClient(factory);
+        using var panelClientB = CreateClient(factory);
+        await CreateEvaluationAsync(
+            panelClientA, panelistAId, interviewId, "A notu", 3, 5, InterviewEvaluationRecommendations.Positive);
+        await CreateEvaluationAsync(
+            panelClientB, panelistBId, interviewId, "B notu", 5, 3, InterviewEvaluationRecommendations.Negative);
+
+        using var viewerClient = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/Interviews/Details/{interviewId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.RecruitmentSpecialist);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, responsibleUserId);
+
+        var response = await viewerClient.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("A notu", body);
+        Assert.Contains("B notu", body);
+        Assert.True(
+            body.Contains("4.0", StringComparison.Ordinal) || body.Contains("4,0", StringComparison.Ordinal),
+            "Ortalama puan (4.0) metinde bulunamadı.");
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_AdayDegerlendirmeOzetiniGoremez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        var candidateId = $"kan60-candidate-{runId}";
+        await CreateCandidateUserAsync(candidateId);
+        using var candidateClient = CreateClient(factory);
+        await CreateCandidateProfileAsync(candidateClient, candidateId);
+        await ApplyAsync(candidateClient, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        var applicationId = (await context.JobApplications.SingleAsync(a => a.JobPostingId == jobPostingId)).Id;
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan60-candidate", null);
+
+        var panelistId = await CreateRecruiterUserAsync(factory, $"kan60-panel-{runId}", departmentId);
+        await AssignParticipantsAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, interviewId, [panelistId]);
+        using var panelClient = CreateClient(factory);
+        await CreateEvaluationAsync(
+            panelClient, panelistId, interviewId, "Gizli not", 4, 4, InterviewEvaluationRecommendations.Positive);
+
+        using var detailsRequest = new HttpRequestMessage(HttpMethod.Get, $"/Interviews/Details/{interviewId}");
+        detailsRequest.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Candidate);
+        detailsRequest.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, candidateId);
+
+        var response = await candidateClient.SendAsync(detailsRequest);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("Değerlendirme Özeti", body);
+        Assert.DoesNotContain("Gizli not", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_DegerlendirmeYoksaBilgilendirmeGosterilir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan60-empty", null);
+
+        using var viewerClient = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/Interviews/Details/{interviewId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.RecruitmentSpecialist);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, responsibleUserId);
+
+        var response = await viewerClient.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("Henüz değerlendirme yapılmadı.", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task CreateInterview_BasariliOlusturmaAdayaBildirimGonderir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan58-create", null);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+
+        var notification = await context.Notifications
+            .SingleOrDefaultAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+        Assert.NotNull(notification);
+        Assert.Contains(start.ToString("dd.MM.yyyy HH:mm"), notification.Message);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Postpone_BasariliErtelemeAdayaVeKatilimciyaBildirimGonderir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan58-postpone", null);
+
+        var panelistId = await CreateRecruiterUserAsync(factory, $"kan58-postpone-panel-{runId}", departmentId);
+        await AssignParticipantsAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, interviewId, [panelistId]);
+
+        var newStart = start.AddDays(5);
+        await PostponeAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId, newStart, newStart.AddHours(1));
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+
+        var candidateNotified = await context.Notifications.AnyAsync(
+            n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId &&
+                n.Title == "Mülakat ertelendi" &&
+                n.Message.Contains(newStart.ToString("dd.MM.yyyy HH:mm")));
+        var panelistNotified = await context.Notifications.AnyAsync(
+            n => n.RecipientUserId == panelistId && n.Title == "Mülakat ertelendi");
+
+        Assert.True(candidateNotified);
+        Assert.True(panelistNotified);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Cancel_BasariliIptalAdayaVeKatilimciyaBildirimGonderir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan58-cancel", null);
+
+        var panelistId = await CreateRecruiterUserAsync(factory, $"kan58-cancel-panel-{runId}", departmentId);
+        await AssignParticipantsAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId, interviewId, [panelistId]);
+
+        await PostStatusActionAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId, "Cancel");
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+
+        var candidateNotified = await context.Notifications.AnyAsync(
+            n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId &&
+                n.Title == "Mülakat iptal edildi");
+        var panelistNotified = await context.Notifications.AnyAsync(
+            n => n.RecipientUserId == panelistId && n.Title == "Mülakat iptal edildi");
+
+        Assert.True(candidateNotified);
+        Assert.True(panelistNotified);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Cancel_TamamlanmisMulakatIcinBasarisizIseBildirimSayisiArtmaz()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan58-fail", null);
+
+        await PostStatusActionAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId, "Complete");
+
+        await using var beforeContext = CreateRawContext();
+        var application = await beforeContext.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+        var countBefore = await beforeContext.Notifications
+            .CountAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+
+        await PostStatusActionAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId, "Cancel");
+
+        await using var afterContext = CreateRawContext();
+        var countAfter = await afterContext.Notifications
+            .CountAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+
+        Assert.Equal(countBefore, countAfter);
+    }
+
+    private static async Task<HttpResponseMessage> CreateEvaluationAsync(
+        HttpClient client,
+        string panelistId,
+        int interviewId,
+        string note,
+        int competencyScore,
+        int overallScore,
+        string recommendation)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, "/ApplicationsPool", SystemRoles.RecruitmentSpecialist, panelistId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/InterviewEvaluations/Create");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.RecruitmentSpecialist);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, panelistId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["interviewId"] = interviewId.ToString(),
+                ["note"] = note,
+                ["competencyScore"] = competencyScore.ToString(),
+                ["overallScore"] = overallScore.ToString(),
+                ["recommendation"] = recommendation,
+                ["__RequestVerificationToken"] = token
+            });
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        return response;
+    }
+
     private static async Task<HttpResponseMessage> PostStatusActionAsync(
         HttpClient client,
         string role,
@@ -992,6 +1269,12 @@ public sealed class InterviewsSqlServerIntegrationTests : IClassFixture<TestWebA
                     {
                         ["ConnectionStrings:DefaultConnection"] = connectionString
                     });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<INotificationPublisher>();
+                services.AddScoped<INotificationPublisher>(
+                    serviceProvider => serviceProvider.GetRequiredService<NotificationService>());
             });
         });
     }
