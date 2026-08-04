@@ -1,0 +1,54 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Offers.OfferFormViewModel
+
+@{
+    var isEdit = Model.OfferId.HasValue;
+    ViewData["Title"] = isEdit ? "Teklifi Düzenle" : "Teklif Oluştur";
+    var formAction = isEdit
+        ? Url.Action("Edit", "Offers", new { id = Model.OfferId })
+        : Url.Action("Create", "Offers", new { applicationId = Model.JobApplicationId });
+}
+
+<h1 class="h3 mb-4">@ViewData["Title"]</h1>
+
+<dl class="row">
+    <dt class="col-sm-3">Aday</dt>
+    <dd class="col-sm-9">@Model.CandidateName</dd>
+    <dt class="col-sm-3">İlan</dt>
+    <dd class="col-sm-9">@Model.JobPostingTitle</dd>
+</dl>
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <form method="post" action="@formAction" novalidate>
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <input type="hidden" asp-for="OfferId" />
+            <input type="hidden" asp-for="JobApplicationId" />
+            <input type="hidden" asp-for="RowVersion" />
+
+            <div class="mb-3">
+                <label asp-for="Salary" class="form-label"></label>
+                <input asp-for="Salary" class="form-control" />
+                <span asp-validation-for="Salary" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="StartDate" class="form-label"></label>
+                <input asp-for="StartDate" class="form-control" type="date" />
+                <span asp-validation-for="StartDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Note" class="form-label"></label>
+                <textarea asp-for="Note" class="form-control"></textarea>
+                <span asp-validation-for="Note" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
