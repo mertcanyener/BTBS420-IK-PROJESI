@@ -85,6 +85,16 @@ public sealed class Offer
         return TransitionTo(OfferStatuses.RejectedByManager, actorUserId, reason, changedAtUtc);
     }
 
+    internal OfferStatusChange Accept(string actorUserId, DateTime changedAtUtc)
+    {
+        return TransitionTo(OfferStatuses.Accepted, actorUserId, reason: null, changedAtUtc);
+    }
+
+    internal OfferStatusChange RejectByCandidate(string actorUserId, DateTime changedAtUtc)
+    {
+        return TransitionTo(OfferStatuses.RejectedByCandidate, actorUserId, reason: null, changedAtUtc);
+    }
+
     private OfferStatusChange TransitionTo(
         string newStatus,
         string actorUserId,

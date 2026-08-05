@@ -53,6 +53,33 @@ else
                         }
                     </td>
                 </tr>
+                @if (application.OfferId.HasValue)
+                {
+                    <tr>
+                        <td colspan="7">
+                            <div class="alert alert-light border mb-0">
+                                <strong>Teklif (@application.OfferStatusLabel):</strong>
+                                @application.OfferSalary?.ToString("N2") TL,
+                                başlangıç @application.OfferStartDate?.ToString("dd.MM.yyyy")
+                                @if (!string.IsNullOrWhiteSpace(application.OfferNote))
+                                {
+                                    <span> — @application.OfferNote</span>
+                                }
+                                @if (application.CanDecideOffer)
+                                {
+                                    <div class="mt-2">
+                                        <form asp-controller="JobApplications" asp-action="AcceptOffer" asp-route-id="@application.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-success">Kabul Et</button>
+                                        </form>
+                                        <form asp-controller="JobApplications" asp-action="RejectOffer" asp-route-id="@application.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Reddet</button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
             }
         </tbody>
     </table>

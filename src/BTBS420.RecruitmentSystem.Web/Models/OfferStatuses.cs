@@ -8,10 +8,14 @@ public static class OfferStatuses
     public const string PendingManagerApproval = "pending_manager_approval";
     public const string Approved = "approved";
     public const string RejectedByManager = "rejected_by_manager";
+    public const string Accepted = "accepted";
+    public const string RejectedByCandidate = "rejected_by_candidate";
 
     private static readonly FrozenSet<string> DefinedStatuses =
-        new[] { Draft, PendingManagerApproval, Approved, RejectedByManager }
-            .ToFrozenSet(StringComparer.Ordinal);
+        new[]
+        {
+            Draft, PendingManagerApproval, Approved, RejectedByManager, Accepted, RejectedByCandidate
+        }.ToFrozenSet(StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, FrozenSet<string>> AllowedTransitions =
         new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
@@ -19,8 +23,10 @@ public static class OfferStatuses
             [Draft] = new[] { PendingManagerApproval }.ToFrozenSet(StringComparer.Ordinal),
             [PendingManagerApproval] =
                 new[] { Approved, RejectedByManager }.ToFrozenSet(StringComparer.Ordinal),
-            [Approved] = FrozenSet<string>.Empty,
-            [RejectedByManager] = FrozenSet<string>.Empty
+            [Approved] = new[] { Accepted, RejectedByCandidate }.ToFrozenSet(StringComparer.Ordinal),
+            [RejectedByManager] = FrozenSet<string>.Empty,
+            [Accepted] = FrozenSet<string>.Empty,
+            [RejectedByCandidate] = FrozenSet<string>.Empty
         };
 
     public static IReadOnlySet<string> All => DefinedStatuses;
@@ -44,6 +50,8 @@ public static class OfferStatuses
             PendingManagerApproval => "Yönetici Onayı Bekliyor",
             Approved => "Onaylandı",
             RejectedByManager => "Yönetici Tarafından Reddedildi",
+            Accepted => "Kabul Edildi",
+            RejectedByCandidate => "Aday Tarafından Reddedildi",
             _ => status
         };
     }

@@ -9,4 +9,10 @@ public sealed record JobApplicationListItemViewModel(
     string ApplicationStatusLabel,
     DateTime AppliedAtUtc,
     DateTime? WithdrawnAtUtc,
-    bool CanWithdraw);
+    bool CanWithdraw,
+    int? OfferId,
+    string? OfferStatusLabel,
+    decimal? OfferSalary,
+    DateOnly? OfferStartDate,
+    string? OfferNote,
+    bool CanDecideOffer);

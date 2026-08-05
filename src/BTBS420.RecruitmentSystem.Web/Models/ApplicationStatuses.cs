@@ -9,9 +9,10 @@ public static class ApplicationStatuses
     public const string Interview = "interview";
     public const string Withdrawn = "withdrawn";
     public const string Rejected = "rejected";
+    public const string Hired = "hired";
 
     private static readonly FrozenSet<string> DefinedStatuses =
-        new[] { New, Screening, Interview, Withdrawn, Rejected }
+        new[] { New, Screening, Interview, Withdrawn, Rejected, Hired }
             .ToFrozenSet(StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, FrozenSet<string>> AllowedTransitions =
@@ -19,9 +20,10 @@ public static class ApplicationStatuses
         {
             [New] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
             [Screening] = new[] { Withdrawn, Rejected }.ToFrozenSet(StringComparer.Ordinal),
-            [Interview] = new[] { Withdrawn, Rejected }.ToFrozenSet(StringComparer.Ordinal),
+            [Interview] = new[] { Withdrawn, Rejected, Hired }.ToFrozenSet(StringComparer.Ordinal),
             [Rejected] = new[] { Screening }.ToFrozenSet(StringComparer.Ordinal),
-            [Withdrawn] = FrozenSet<string>.Empty
+            [Withdrawn] = FrozenSet<string>.Empty,
+            [Hired] = FrozenSet<string>.Empty
         };
 
     public static IReadOnlySet<string> All => DefinedStatuses;
@@ -51,6 +53,7 @@ public static class ApplicationStatuses
             Interview => "Mülakat",
             Withdrawn => "Geri Çekildi",
             Rejected => "Reddedildi",
+            Hired => "İşe Alındı",
             _ => status
         };
     }
