@@ -1,0 +1,135 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.ActivityLogs.ActivityLogIndexViewModel
+@using BTBS420.RecruitmentSystem.Web.ActivityLogging
+
+@{
+    ViewData["Title"] = "Aktivite Kayıtları";
+
+    var routeValues = new Dictionary<string, string>
+    {
+        ["dateFrom"] = Model.Filter.DateFrom?.ToString("yyyy-MM-dd") ?? string.Empty,
+        ["dateTo"] = Model.Filter.DateTo?.ToString("yyyy-MM-dd") ?? string.Empty,
+        ["userId"] = Model.Filter.UserId ?? string.Empty,
+        ["jobPostingId"] = Model.Filter.JobPostingId?.ToString() ?? string.Empty,
+        ["candidateId"] = Model.Filter.CandidateId ?? string.Empty,
+        ["actionCode"] = Model.Filter.ActionCode ?? string.Empty
+    };
+}
+
+<h1 class="h2 mb-4">Aktivite Kayıtları</h1>
+
+<form asp-controller="ActivityLogs" asp-action="Index" method="get" class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+        <label class="form-label" for="dateFrom">Başlangıç</label>
+        <input type="date" class="form-control" id="dateFrom" name="dateFrom" value="@Model.Filter.DateFrom?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-6 col-md-2">
+        <label class="form-label" for="dateTo">Bitiş</label>
+        <input type="date" class="form-control" id="dateTo" name="dateTo" value="@Model.Filter.DateTo?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="userId">Kullanıcı</label>
+        <select class="form-select" id="userId" name="userId">
+            <option value="">Tümü</option>
+            @foreach (var option in Model.FilterOptions.UserOptions)
+            {
+                <option value="@option.Id" selected="@(Model.Filter.UserId == option.Id)">@option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="jobPostingId">İlan</label>
+        <select class="form-select" id="jobPostingId" name="jobPostingId">
+            <option value="">Tümü</option>
+            @foreach (var option in Model.FilterOptions.JobPostingOptions)
+            {
+                <option value="@option.Id" selected="@(Model.Filter.JobPostingId == option.Id)">@option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="candidateId">Aday</label>
+        <select class="form-select" id="candidateId" name="candidateId">
+            <option value="">Tümü</option>
+            @foreach (var option in Model.FilterOptions.CandidateOptions)
+            {
+                <option value="@option.Id" selected="@(Model.Filter.CandidateId == option.Id)">@option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="actionCode">İşlem</label>
+        <select class="form-select" id="actionCode" name="actionCode">
+            <option value="">Tümü</option>
+            @foreach (var code in Model.FilterOptions.ActionCodeOptions)
+            {
+                <option value="@code" selected="@(Model.Filter.ActionCode == code)">@ActivityActionCodes.GetDisplayLabel(code)</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Filtrele</button>
+        <a class="btn btn-outline-secondary" asp-controller="ActivityLogs" asp-action="Export" asp-all-route-data="routeValues">CSV Olarak Dışa Aktar</a>
+    </div>
+</form>
+
+<p class="text-body-secondary">Toplam @Model.TotalCount kayıt.</p>
+
+@if (Model.Entries.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Seçtiğiniz filtrelerde aktivite kaydı bulunamadı.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Tarih</th>
+                <th scope="col">Aktör</th>
+                <th scope="col">İşlem</th>
+                <th scope="col">İlan</th>
+                <th scope="col">Aday</th>
+                <th scope="col">Özet</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in Model.Entries)
+            {
+                <tr>
+                    <td>@entry.OccurredAtUtc.UtcDateTime.ToString("dd.MM.yyyy HH:mm:ss")</td>
+                    <td>
+                        @if (entry.ActorUserId is not null)
+                        {
+                            <a asp-controller="Users" asp-action="Details" asp-route-id="@entry.ActorUserId">@entry.ActorName</a>
+                        }
+                        else
+                        {
+                            @entry.ActorName
+                        }
+                    </td>
+                    <td>@entry.ActionLabel</td>
+                    <td>@(entry.JobPostingTitle ?? "-")</td>
+                    <td>@(entry.CandidateName ?? "-")</td>
+                    <td>@entry.Summary</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav aria-label="Sayfalama">
+            <ul class="pagination">
+                @for (var pageNumber = 1; pageNumber <= Model.TotalPages; pageNumber++)
+                {
+                    <li class="page-item @(pageNumber == Model.Filter.Page ? "active" : "")">
+                        <a class="page-link" asp-controller="ActivityLogs" asp-action="Index" asp-all-route-data="routeValues" asp-route-page="@pageNumber">@pageNumber</a>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+}

@@ -42,4 +42,25 @@ public static class ActivityActionCodes
     {
         return DefinedCodes.Contains(actionCode);
     }
+
+    public static string GetDisplayLabel(string actionCode)
+    {
+        return actionCode switch
+        {
+            AuthenticationSucceeded => "Giriş Yapıldı",
+            AuthenticationFailed => "Giriş Başarısız",
+            AuthenticationSignedOut => "Çıkış Yapıldı",
+            UserRegistered => "Kullanıcı Kaydoldu",
+            PasswordResetRequested => "Şifre Sıfırlama İstendi",
+            PasswordResetSucceeded => "Şifre Sıfırlandı",
+            AuthorizationDenied => "Yetkilendirme Reddedildi",
+            EntityCreated => "Oluşturuldu",
+            EntityUpdated => "Güncellendi",
+            EntityStatusChanged => "Durum Değişti",
+            EntityArchived => "Arşivlendi",
+            EntityDeleted => "Silindi",
+            EntityDownloaded => "İndirildi",
+            _ => actionCode
+        };
+    }
 }

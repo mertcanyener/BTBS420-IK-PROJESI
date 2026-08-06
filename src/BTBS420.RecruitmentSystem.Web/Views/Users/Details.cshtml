@@ -85,6 +85,9 @@
 </div>
 
 <h2 class="h4 mt-4 mb-3">İşlem Geçmişi</h2>
+<p>
+    <a asp-controller="ActivityLogs" asp-action="Index" asp-route-userId="@Model.Id">Tüm Aktivite Kayıtlarında Gör</a>
+</p>
 
 @if (Model.ActivityLog.Count == 0)
 {

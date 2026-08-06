@@ -585,20 +585,9 @@ public sealed class UsersController(
                         actorNames.TryGetValue(entry.ActorUserId, out var actorName)
                         ? actorName
                         : "-",
-                    DescribeActionCode(entry.ActionCode),
+                    ActivityActionCodes.GetDisplayLabel(entry.ActionCode),
                     entry.Summary))
             .ToList();
-    }
-
-    private static string DescribeActionCode(string actionCode)
-    {
-        return actionCode switch
-        {
-            ActivityActionCodes.EntityCreated => "Oluşturuldu",
-            ActivityActionCodes.EntityUpdated => "Güncellendi",
-            ActivityActionCodes.EntityStatusChanged => "Durum Değişti",
-            _ => actionCode
-        };
     }
 
     private async Task<IActionResult> ReturnCreateViewWithOptionsAsync(
