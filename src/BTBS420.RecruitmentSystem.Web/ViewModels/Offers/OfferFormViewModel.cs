@@ -24,7 +24,12 @@ public sealed class OfferFormViewModel
     public bool CanDecide { get; set; }
 
     [Display(Name = "Maaş")]
-    [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Maaş sıfırdan büyük olmalıdır.")]
+    [Range(
+        typeof(decimal),
+        "0.01",
+        "79228162514264337593543950335",
+        ErrorMessage = "Maaş sıfırdan büyük olmalıdır.",
+        ParseLimitsInInvariantCulture = true)]
     public decimal? Salary { get; set; }
 
     [Display(Name = "Başlangıç Tarihi")]
