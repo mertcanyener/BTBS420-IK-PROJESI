@@ -2,6 +2,7 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using BTBS420.RecruitmentSystem.Web.ViewModels.Offers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -15,6 +16,7 @@ public sealed class OffersController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     IActivityLogService activityLogService,
+    INotificationPublisher notificationPublisher,
     TimeProvider timeProvider) : Controller
 {
     private const string InvalidApplicationStatusMessage =
@@ -367,6 +369,8 @@ public sealed class OffersController(
                 JobPostingId: offer.JobApplication.JobPostingId.ToString(),
                 CandidateId: offer.JobApplication.CandidateProfile.ApplicationUserId));
 
+        await StageOfferApprovedNotificationAsync(offer, cancellationToken);
+
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -478,6 +482,22 @@ public sealed class OffersController(
             .Include(offer => offer.JobApplication)
             .ThenInclude(application => application.CandidateProfile)
             .FirstOrDefaultAsync(offer => offer.Id == offerId, cancellationToken);
+    }
+
+    private Task StageOfferApprovedNotificationAsync(Offer offer, CancellationToken cancellationToken)
+    {
+        var eventKey = $"offer-status-changed:{offer.Id}:{OfferStatuses.Approved}";
+        var message =
+            $"\"{offer.JobApplication.JobPosting.Title}\" ilanı için size bir iş teklifi sunuldu. " +
+            "Başvurularım sayfasından teklifi inceleyip kararınızı bildirebilirsiniz.";
+
+        return notificationPublisher.StageIfMissingAsync(
+            new NotificationEntry(
+                offer.JobApplication.CandidateProfile.ApplicationUserId,
+                eventKey,
+                "Size bir iş teklifi sunuldu",
+                message),
+            cancellationToken);
     }
 
     private async Task<bool> IsAuthorizedForApplicationAsync(JobPosting jobPosting)

@@ -366,6 +366,79 @@ public sealed class OffersSqlServerIntegrationTests : IClassFixture<TestWebAppli
     }
 
     [SqlServerIntegrationFact]
+    public async Task Approve_OnaylananTeklifAdayaBildirimGonderir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan64-manager-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        var candidateUserId = (await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId)).CandidateProfile.ApplicationUserId;
+
+        using var managerClient = CreateClient(factory);
+        await ApproveOfferAsync(managerClient, SystemRoles.HiringManager, managerId, offerId);
+
+        await using var verifyContext = CreateRawContext();
+        var notification = await verifyContext.Notifications
+            .SingleOrDefaultAsync(n => n.RecipientUserId == candidateUserId);
+        Assert.NotNull(notification);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Submit_TaslakVeOnayBekleyenTeklifAdayaBildirimGondermez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, recruiterId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        var candidateUserId = (await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId)).CandidateProfile.ApplicationUserId;
+
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        await using var verifyContext = CreateRawContext();
+        var notificationCount = await verifyContext.Notifications
+            .CountAsync(n => n.RecipientUserId == candidateUserId);
+        Assert.Equal(0, notificationCount);
+    }
+
+    [SqlServerIntegrationFact]
     public async Task Approve_TaslaktakiTeklifBasarisizOlur()
     {
         using var factory = CreateSqlFactory();

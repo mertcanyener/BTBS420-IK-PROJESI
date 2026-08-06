@@ -2,6 +2,7 @@ using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Models;
+using BTBS420.RecruitmentSystem.Web.Notifications;
 using BTBS420.RecruitmentSystem.Web.ViewModels.JobApplications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -16,6 +17,7 @@ public sealed class JobApplicationsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     IActivityLogService activityLogService,
+    INotificationPublisher notificationPublisher,
     TimeProvider timeProvider) : Controller
 {
     private const string ProfileRequiredMessage =
@@ -182,6 +184,7 @@ public sealed class JobApplicationsController(
         }
 
         var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
             .FirstOrDefaultAsync(
                 candidateApplication =>
                     candidateApplication.Id == id && candidateApplication.CandidateProfileId == profile.Id,
@@ -237,6 +240,8 @@ public sealed class JobApplicationsController(
                 JobPostingId: application.JobPostingId.ToString(),
                 CandidateId: profile.ApplicationUserId));
 
+        await StageOfferDecisionNotificationsAsync(application, offer, profile, offerStatusChange, cancellationToken);
+
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -263,6 +268,7 @@ public sealed class JobApplicationsController(
         }
 
         var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
             .FirstOrDefaultAsync(
                 candidateApplication =>
                     candidateApplication.Id == id && candidateApplication.CandidateProfileId == profile.Id,
@@ -317,6 +323,8 @@ public sealed class JobApplicationsController(
                 application.Id.ToString(),
                 JobPostingId: application.JobPostingId.ToString(),
                 CandidateId: profile.ApplicationUserId));
+
+        await StageOfferDecisionNotificationsAsync(application, offer, profile, offerStatusChange, cancellationToken);
 
         try
         {
@@ -398,6 +406,38 @@ public sealed class JobApplicationsController(
 
         TempData["StatusMessage"] = ApplicationSucceededMessage;
         return RedirectToAction("Details", "PublicJobPostings", new { id = jobPostingId });
+    }
+
+    private async Task StageOfferDecisionNotificationsAsync(
+        JobApplication application,
+        Offer offer,
+        CandidateProfile profile,
+        OfferStatusChange offerStatusChange,
+        CancellationToken cancellationToken)
+    {
+        var approverUserId = await dbContext.OfferStatusChanges
+            .Where(change => change.OfferId == offer.Id && change.ToStatus == OfferStatuses.Approved)
+            .Select(change => change.ActorUserId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var recipientUserIds = new List<string> { offer.CreatedByUserId };
+        if (!string.IsNullOrEmpty(approverUserId))
+        {
+            recipientUserIds.Add(approverUserId);
+        }
+
+        var eventKey = $"offer-status-changed:{offer.Id}:{offerStatusChange.ToStatus}";
+        var decisionLabel = OfferStatuses.GetDisplayLabel(offerStatusChange.ToStatus);
+        var message =
+            $"{profile.FirstName} {profile.LastName}, \"{application.JobPosting.Title}\" ilanı için " +
+            $"teklif kararını \"{decisionLabel}\" olarak bildirdi.";
+
+        foreach (var recipientUserId in recipientUserIds.Distinct(StringComparer.Ordinal))
+        {
+            await notificationPublisher.StageIfMissingAsync(
+                new NotificationEntry(recipientUserId, eventKey, "Aday teklif kararını bildirdi", message),
+                cancellationToken);
+        }
     }
 
     private async Task<CandidateProfile?> GetCurrentProfileAsync(CancellationToken cancellationToken)
