@@ -79,7 +79,6 @@ Başvuru durumları:
 - Yeni
 - Ön Eleme
 - Mülakat
-- Teklif
 - İşe Alındı
 - Reddedildi
 - Geri Çekildi
@@ -104,8 +103,9 @@ Mülakat durumları:
 
 - Planlandı
 - Tamamlandı
-- Ertelendi
 - İptal Edildi
+
+(Erteleme ayrı bir durum değildir; Planlandı durumundaki mülakatın tarih/saatini günceller.)
 
 ### 8. Değerlendirme ve Teklif
 
@@ -117,6 +117,15 @@ Mülakat durumları:
 - İş teklifi oluşturma
 - Teklifi onaya gönderme
 - Aday kararını takip etme
+
+Teklif durumları:
+
+- Taslak
+- Yönetici Onayı Bekliyor
+- Onaylandı
+- Yönetici Tarafından Reddedildi
+- Kabul Edildi
+- Aday Tarafından Reddedildi
 
 ### 9. Dashboard
 
