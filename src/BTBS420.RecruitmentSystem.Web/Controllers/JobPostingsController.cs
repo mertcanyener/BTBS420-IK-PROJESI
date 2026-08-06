@@ -17,6 +17,7 @@ public sealed class JobPostingsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     IActivityLogService activityLogService,
+    IRecruitmentScopeService scopeService,
     TimeProvider timeProvider) : Controller
 {
     private const string InactivePositionMessage =
@@ -46,28 +47,13 @@ public sealed class JobPostingsController(
         DateOnly? deadlineTo,
         CancellationToken cancellationToken)
     {
-        var query = dbContext.JobPostings.AsQueryable();
-
-        if (!User.IsInRole(SystemRoles.Admin))
+        var scope = await scopeService.GetScopeAsync(User, cancellationToken);
+        if (scope is null)
         {
-            var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser is null)
-            {
-                return Forbid();
-            }
-
-            if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
-            {
-                query = query.Where(jobPosting => jobPosting.ResponsibleUserId == currentUser.Id);
-            }
-            else if (User.IsInRole(SystemRoles.HiringManager))
-            {
-                query = currentUser.DepartmentId is null
-                    ? query.Where(jobPosting => false)
-                    : query.Where(
-                        jobPosting => jobPosting.Position.DepartmentId == currentUser.DepartmentId.Value);
-            }
+            return Forbid();
         }
+
+        var query = scope.ApplyToJobPostings(dbContext.JobPostings);
 
         if (!string.IsNullOrWhiteSpace(status) && JobPostingStatuses.IsDefined(status))
         {
@@ -120,13 +106,10 @@ public sealed class JobPostingsController(
             return NotFound();
         }
 
-        if (!User.IsInRole(SystemRoles.Admin))
+        var scope = await scopeService.GetScopeAsync(User, cancellationToken);
+        if (scope is null || !scope.Includes(jobPosting))
         {
-            var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser is null || !IsWithinScope(jobPosting, currentUser))
-            {
-                return NotFound();
-            }
+            return NotFound();
         }
 
         return View(
@@ -384,22 +367,6 @@ public sealed class JobPostingsController(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return RedirectToAction(nameof(Index));
-    }
-
-    private bool IsWithinScope(JobPosting jobPosting, ApplicationUser currentUser)
-    {
-        if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
-        {
-            return jobPosting.ResponsibleUserId == currentUser.Id;
-        }
-
-        if (User.IsInRole(SystemRoles.HiringManager))
-        {
-            return currentUser.DepartmentId is not null &&
-                jobPosting.Position.DepartmentId == currentUser.DepartmentId.Value;
-        }
-
-        return false;
     }
 
     private async Task<bool> ValidateAssociationsAsync(

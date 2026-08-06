@@ -1048,6 +1048,190 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
         Assert.Equal(1, count);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Index_DepartmanFiltresiTekBasinaDogruSonuclariDondurur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+
+        var (jobPostingAId, departmentAId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-A");
+        var (jobPostingBId, _, _) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-B", recruiterId);
+
+        await CreateApplicationAsync(factory, setupClient, $"{runId}-A", jobPostingAId);
+        await CreateApplicationAsync(factory, setupClient, $"{runId}-B", jobPostingBId);
+
+        var body = await GetIndexBodyAsync(
+            factory, SystemRoles.Admin, TestAuthenticationHandler.DefaultUserId, $"?departmentId={departmentAId}");
+
+        // İlan filtre seçenekleri kapsam dahilindeki tüm ilanları listeler (departman filtresiyle
+        // daraltılmaz), bu yüzden satırları dropdown'daki <option> etiketlerinden ayırt etmek için
+        // tablo hücresi biçimini kontrol ediyoruz.
+        Assert.Contains($"<td>Kan51-Ilan-{runId}-A</td>", body);
+        Assert.DoesNotContain($"<td>Kan51-Ilan-{runId}-B</td>", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Index_DurumFiltresiTekBasinaDogruSonuclariDondurur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+
+        var (jobPostingAId, _, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-A");
+        var (jobPostingBId, _, _) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-B", recruiterId);
+
+        await CreateApplicationAsync(factory, setupClient, $"{runId}-A", jobPostingAId);
+        var withdrawnCandidateId = $"kan25-candidate-{runId}-B";
+        var withdrawnApplicationId = await CreateCandidateApplicationAsync(
+            factory, withdrawnCandidateId, jobPostingBId);
+        using (var withdrawClient = CreateClient(factory))
+        {
+            await WithdrawApplicationAsync(withdrawClient, withdrawnCandidateId, withdrawnApplicationId);
+        }
+
+        var body = await GetIndexBodyAsync(
+            factory,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId,
+            $"?status={ApplicationStatuses.New}");
+
+        Assert.Contains($"<td>Kan51-Ilan-{runId}-A</td>", body);
+        Assert.DoesNotContain($"<td>Kan51-Ilan-{runId}-B</td>", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Index_DepartmanVeDurumFiltreleriBirlikteCalisir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+
+        var (jobPostingAId, departmentAId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-A");
+        var (jobPostingBId, _, _) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-B", recruiterId);
+
+        await CreateApplicationAsync(factory, setupClient, $"{runId}-A-new", jobPostingAId);
+
+        var withdrawnCandidateId = $"kan25-candidate-{runId}-A-withdrawn";
+        var withdrawnApplicationId = await CreateCandidateApplicationAsync(
+            factory, withdrawnCandidateId, jobPostingAId);
+        using (var withdrawClient = CreateClient(factory))
+        {
+            await WithdrawApplicationAsync(withdrawClient, withdrawnCandidateId, withdrawnApplicationId);
+        }
+
+        await CreateApplicationAsync(factory, setupClient, $"{runId}-B-new", jobPostingBId);
+
+        var titleA = $"Kan51-Ilan-{runId}-A";
+        var titleB = $"Kan51-Ilan-{runId}-B";
+
+        var body = await GetIndexBodyAsync(
+            factory,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId,
+            $"?departmentId={departmentAId}&status={ApplicationStatuses.New}");
+
+        Assert.Single(Regex.Matches(body, Regex.Escape($"<td>{titleA}</td>")));
+        Assert.DoesNotContain($"<td>{titleB}</td>", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Index_SayfalamaSirasindaFiltreKorunur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+
+        var (jobPostingId, departmentId, _) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+
+        for (var i = 0; i < 3; i++)
+        {
+            await CreateApplicationAsync(factory, setupClient, $"{runId}-{i}", jobPostingId);
+        }
+
+        var body = await GetIndexBodyAsync(
+            factory,
+            SystemRoles.Admin,
+            TestAuthenticationHandler.DefaultUserId,
+            $"?departmentId={departmentId}&pageSize=2");
+
+        Assert.Contains("page=2", body);
+        Assert.Contains($"departmentId={departmentId}", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Index_YoneticiFiltreSecenekleriKendiDepartmaniylaSinirlidir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+
+        var (_, ownDepartmentId, _) = await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-Own");
+        await CreatePublishedJobPostingAsync(setupClient, factory, $"{runId}-Other");
+
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan25-manager-{runId}", ownDepartmentId);
+
+        var body = await GetIndexBodyAsync(factory, SystemRoles.HiringManager, managerId);
+
+        Assert.Contains($"Kan51-Dept-{runId}-Own", body);
+        Assert.DoesNotContain($"Kan51-Dept-{runId}-Other", body);
+    }
+
+    private static async Task<int> CreateCandidateApplicationAsync(
+        WebApplicationFactory<Program> factory,
+        string candidateId,
+        int jobPostingId)
+    {
+        await CreateCandidateUserAsync(candidateId);
+        using var candidateClient = CreateClient(factory);
+        var profileId = await CreateCandidateProfileAsync(candidateClient, candidateId);
+        await ApplyAsync(candidateClient, candidateId, jobPostingId);
+
+        await using var context = CreateRawContext();
+        return (await context.JobApplications.SingleAsync(a => a.CandidateProfileId == profileId)).Id;
+    }
+
+    private static async Task WithdrawApplicationAsync(
+        HttpClient client,
+        string candidateId,
+        int applicationId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, "/JobApplications", SystemRoles.Candidate, candidateId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/JobApplications/Withdraw/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, SystemRoles.Candidate);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, candidateId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+    }
+
+    private static async Task<string> GetIndexBodyAsync(
+        WebApplicationFactory<Program> factory,
+        string role,
+        string userId,
+        string queryString = "")
+    {
+        using var client = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/ApplicationsPool{queryString}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
     private static async Task<int> CreateInterviewAndGetIdAsync(
         HttpClient client,
         string recruiterId,

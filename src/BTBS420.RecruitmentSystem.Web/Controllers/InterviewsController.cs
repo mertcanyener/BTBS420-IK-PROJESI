@@ -19,7 +19,8 @@ public sealed class InterviewsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     IActivityLogService activityLogService,
-    INotificationPublisher notificationPublisher) : Controller
+    INotificationPublisher notificationPublisher,
+    IRecruitmentScopeService scopeService) : Controller
 {
     private const string OperationFailedMessage = "İşlem tamamlanamadı, lütfen tekrar deneyin.";
 
@@ -60,33 +61,15 @@ public sealed class InterviewsController(
             query = query.Where(
                 interview => interview.JobApplication.CandidateProfile.ApplicationUserId == userId);
         }
-        else if (!User.IsInRole(SystemRoles.Admin))
+        else
         {
-            var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser is null)
+            var scope = await scopeService.GetScopeAsync(User, cancellationToken);
+            if (scope is null)
             {
                 return Forbid();
             }
 
-            if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
-            {
-                query = query.Where(
-                    interview =>
-                        interview.JobApplication.JobPosting.ResponsibleUserId == currentUser.Id);
-            }
-            else if (User.IsInRole(SystemRoles.HiringManager))
-            {
-                query = currentUser.DepartmentId is null
-                    ? query.Where(interview => false)
-                    : query.Where(
-                        interview =>
-                            interview.JobApplication.JobPosting.Position.DepartmentId ==
-                            currentUser.DepartmentId.Value);
-            }
-            else
-            {
-                return Forbid();
-            }
+            query = scope.ApplyToInterviews(query);
         }
 
         var interviews = await query
@@ -646,32 +629,7 @@ public sealed class InterviewsController(
                 : null;
         }
 
-        if (User.IsInRole(SystemRoles.Admin))
-        {
-            return interview;
-        }
-
-        var currentUser = await userManager.GetUserAsync(User);
-        if (currentUser is null)
-        {
-            return null;
-        }
-
-        if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
-        {
-            return interview.JobApplication.JobPosting.ResponsibleUserId == currentUser.Id
-                ? interview
-                : null;
-        }
-
-        if (User.IsInRole(SystemRoles.HiringManager))
-        {
-            return currentUser.DepartmentId is not null &&
-                interview.JobApplication.JobPosting.Position.DepartmentId == currentUser.DepartmentId.Value
-                ? interview
-                : null;
-        }
-
-        return null;
+        var scope = await scopeService.GetScopeAsync(User, cancellationToken);
+        return scope is not null && scope.Includes(interview) ? interview : null;
     }
 }

@@ -76,6 +76,7 @@ builder.Services.AddScoped<INotificationCenterService>(
 builder.Services.Configure<CandidateDocumentStorageOptions>(
     builder.Configuration.GetSection(CandidateDocumentStorageOptions.SectionName));
 builder.Services.AddScoped<ICandidateDocumentStorageService, FileSystemCandidateDocumentStorageService>();
+builder.Services.AddScoped<IRecruitmentScopeService, RecruitmentScopeService>();
 
 var app = builder.Build();
 

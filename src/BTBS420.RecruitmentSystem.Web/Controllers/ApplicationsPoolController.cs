@@ -6,6 +6,8 @@ using BTBS420.RecruitmentSystem.Web.Models;
 using BTBS420.RecruitmentSystem.Web.Notifications;
 using BTBS420.RecruitmentSystem.Web.Storage;
 using BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool;
+using BTBS420.RecruitmentSystem.Web.ViewModels.Dashboard;
+using BTBS420.RecruitmentSystem.Web.ViewModels.Positions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -21,8 +23,13 @@ public sealed class ApplicationsPoolController(
     IActivityLogService activityLogService,
     INotificationPublisher notificationPublisher,
     ICandidateDocumentStorageService storageService,
+    IRecruitmentScopeService scopeService,
     TimeProvider timeProvider) : Controller
 {
+    private const int DefaultPageSize = 10;
+
+    private const int MaximumPageSize = 50;
+
     private const string NoteRequiredMessage = "Not metni boş olamaz.";
 
     private const string NoteAddedMessage = "Not eklendi.";
@@ -58,41 +65,67 @@ public sealed class ApplicationsPoolController(
     ];
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? status, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(
+        string? status,
+        int? departmentId,
+        int? positionId,
+        int? jobPostingId,
+        DateOnly? dateFrom,
+        DateOnly? dateTo,
+        int page = 1,
+        int pageSize = DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        var query = dbContext.JobApplications.AsQueryable();
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
 
-        if (!User.IsInRole(SystemRoles.Admin))
+        var scope = await scopeService.GetScopeAsync(User, cancellationToken);
+        if (scope is null)
         {
-            var currentUser = await userManager.GetUserAsync(User);
-            if (currentUser is null)
-            {
-                return Forbid();
-            }
-
-            if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
-            {
-                query = query.Where(
-                    application => application.JobPosting.ResponsibleUserId == currentUser.Id);
-            }
-            else if (User.IsInRole(SystemRoles.HiringManager))
-            {
-                query = currentUser.DepartmentId is null
-                    ? query.Where(application => false)
-                    : query.Where(
-                        application =>
-                            application.JobPosting.Position.DepartmentId ==
-                            currentUser.DepartmentId.Value);
-            }
+            return Forbid();
         }
+
+        var query = scope.ApplyToJobApplications(dbContext.JobApplications);
 
         if (!string.IsNullOrWhiteSpace(status) && ApplicationStatuses.IsDefined(status))
         {
             query = query.Where(application => application.Status == status);
         }
 
+        if (departmentId.HasValue)
+        {
+            query = query.Where(
+                application => application.JobPosting.Position.DepartmentId == departmentId.Value);
+        }
+
+        if (positionId.HasValue)
+        {
+            query = query.Where(application => application.JobPosting.PositionId == positionId.Value);
+        }
+
+        if (jobPostingId.HasValue)
+        {
+            query = query.Where(application => application.JobPostingId == jobPostingId.Value);
+        }
+
+        if (dateFrom.HasValue)
+        {
+            var fromUtc = dateFrom.Value.ToDateTime(TimeOnly.MinValue);
+            query = query.Where(application => application.AppliedAtUtc >= fromUtc);
+        }
+
+        if (dateTo.HasValue)
+        {
+            var toUtc = dateTo.Value.ToDateTime(TimeOnly.MaxValue);
+            query = query.Where(application => application.AppliedAtUtc <= toUtc);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
         var applications = await query
             .OrderByDescending(application => application.AppliedAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(
                 application => new
                 {
@@ -119,8 +152,11 @@ public sealed class ApplicationsPoolController(
                     application.AppliedAtUtc))
             .ToList();
 
-        return View(
-            new ApplicationPoolIndexViewModel(listItems, ApplicationStatuses.All.ToList(), status));
+        var filterOptions = await BuildFilterOptionsAsync(scope, cancellationToken);
+        var filter = new DashboardFilterViewModel(
+            status, departmentId, positionId, jobPostingId, dateFrom, dateTo, page, pageSize);
+
+        return View(new ApplicationPoolIndexViewModel(listItems, filter, filterOptions, totalCount));
     }
 
     [HttpGet]
@@ -728,29 +764,42 @@ public sealed class ApplicationsPoolController(
 
     private async Task<bool> IsAuthorizedForApplicationAsync(JobPosting jobPosting)
     {
-        if (User.IsInRole(SystemRoles.Admin))
-        {
-            return true;
-        }
+        var scope = await scopeService.GetScopeAsync(User);
+        return scope is not null && scope.Includes(jobPosting);
+    }
 
-        var currentUser = await userManager.GetUserAsync(User);
-        if (currentUser is null)
-        {
-            return false;
-        }
+    private async Task<DashboardFilterOptionsViewModel> BuildFilterOptionsAsync(
+        RecruitmentScope scope,
+        CancellationToken cancellationToken)
+    {
+        var scopedJobPostings = scope.ApplyToJobPostings(dbContext.JobPostings);
 
-        if (User.IsInRole(SystemRoles.RecruitmentSpecialist))
-        {
-            return jobPosting.ResponsibleUserId == currentUser.Id;
-        }
+        var departmentOptions = await scopedJobPostings
+            .Select(
+                jobPosting => new
+                {
+                    jobPosting.Position.DepartmentId,
+                    jobPosting.Position.Department.Name
+                })
+            .Distinct()
+            .OrderBy(department => department.Name)
+            .Select(department => new SelectOptionViewModel(department.DepartmentId, department.Name))
+            .ToListAsync(cancellationToken);
 
-        if (User.IsInRole(SystemRoles.HiringManager))
-        {
-            return currentUser.DepartmentId is not null &&
-                jobPosting.Position.DepartmentId == currentUser.DepartmentId.Value;
-        }
+        var positionOptions = await scopedJobPostings
+            .Select(jobPosting => new { jobPosting.PositionId, jobPosting.Position.Name })
+            .Distinct()
+            .OrderBy(position => position.Name)
+            .Select(position => new SelectOptionViewModel(position.PositionId, position.Name))
+            .ToListAsync(cancellationToken);
 
-        return false;
+        var jobPostingOptions = await scopedJobPostings
+            .OrderBy(jobPosting => jobPosting.Title)
+            .Select(jobPosting => new SelectOptionViewModel(jobPosting.Id, jobPosting.Title))
+            .ToListAsync(cancellationToken);
+
+        return new DashboardFilterOptionsViewModel(
+            ApplicationStatuses.All.ToList(), departmentOptions, positionOptions, jobPostingOptions);
     }
 
     private async Task<ApplicationPoolDetailViewModel> BuildDetailViewModelAsync(

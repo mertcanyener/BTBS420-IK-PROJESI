@@ -3,20 +3,68 @@
 
 @{
     ViewData["Title"] = "Başvuru Havuzu";
+
+    var routeValues = new Dictionary<string, string>
+    {
+        ["status"] = Model.Filter.Status ?? string.Empty,
+        ["departmentId"] = Model.Filter.DepartmentId?.ToString() ?? string.Empty,
+        ["positionId"] = Model.Filter.PositionId?.ToString() ?? string.Empty,
+        ["jobPostingId"] = Model.Filter.JobPostingId?.ToString() ?? string.Empty,
+        ["dateFrom"] = Model.Filter.DateFrom?.ToString("yyyy-MM-dd") ?? string.Empty,
+        ["dateTo"] = Model.Filter.DateTo?.ToString("yyyy-MM-dd") ?? string.Empty
+    };
 }
 
 <h1 class="h2 mb-4">Başvuru Havuzu</h1>
 
 <form asp-controller="ApplicationsPool" asp-action="Index" method="get" class="row g-2 mb-4">
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-2">
         <label class="form-label" for="status">Durum</label>
         <select class="form-select" id="status" name="status">
             <option value="">Tümü</option>
-            @foreach (var statusOption in Model.StatusOptions)
+            @foreach (var statusOption in Model.FilterOptions.StatusOptions)
             {
-                <option value="@statusOption" selected="@(Model.SelectedStatus == statusOption)">@ApplicationStatuses.GetDisplayLabel(statusOption)</option>
+                <option value="@statusOption" selected="@(Model.Filter.Status == statusOption)">@ApplicationStatuses.GetDisplayLabel(statusOption)</option>
             }
         </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="departmentId">Departman</label>
+        <select class="form-select" id="departmentId" name="departmentId">
+            <option value="">Tümü</option>
+            @foreach (var option in Model.FilterOptions.DepartmentOptions)
+            {
+                <option value="@option.Id" selected="@(Model.Filter.DepartmentId == option.Id)">@option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="positionId">Pozisyon</label>
+        <select class="form-select" id="positionId" name="positionId">
+            <option value="">Tümü</option>
+            @foreach (var option in Model.FilterOptions.PositionOptions)
+            {
+                <option value="@option.Id" selected="@(Model.Filter.PositionId == option.Id)">@option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="jobPostingId">İlan</label>
+        <select class="form-select" id="jobPostingId" name="jobPostingId">
+            <option value="">Tümü</option>
+            @foreach (var option in Model.FilterOptions.JobPostingOptions)
+            {
+                <option value="@option.Id" selected="@(Model.Filter.JobPostingId == option.Id)">@option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-6 col-md-1">
+        <label class="form-label" for="dateFrom">Başlangıç</label>
+        <input type="date" class="form-control" id="dateFrom" name="dateFrom" value="@Model.Filter.DateFrom?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-6 col-md-1">
+        <label class="form-label" for="dateTo">Bitiş</label>
+        <input type="date" class="form-control" id="dateTo" name="dateTo" value="@Model.Filter.DateTo?.ToString("yyyy-MM-dd")" />
     </div>
     <div class="col-12 col-md-2 d-flex align-items-end">
         <button type="submit" class="btn btn-primary w-100">Filtrele</button>
@@ -27,7 +75,7 @@
 {
     <div class="card border-0 shadow-sm">
         <div class="card-body p-4 text-center">
-            <p class="text-body-secondary mb-0">Kapsamınızda başvuru bulunamadı.</p>
+            <p class="text-body-secondary mb-0">Kapsamınızda veya seçtiğiniz filtrelerde başvuru bulunamadı.</p>
         </div>
     </div>
 }
@@ -62,4 +110,18 @@ else
             }
         </tbody>
     </table>
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav aria-label="Sayfalama">
+            <ul class="pagination">
+                @for (var pageNumber = 1; pageNumber <= Model.TotalPages; pageNumber++)
+                {
+                    <li class="page-item @(pageNumber == Model.Filter.Page ? "active" : "")">
+                        <a class="page-link" asp-controller="ApplicationsPool" asp-action="Index" asp-all-route-data="routeValues" asp-route-page="@pageNumber">@pageNumber</a>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
 }
