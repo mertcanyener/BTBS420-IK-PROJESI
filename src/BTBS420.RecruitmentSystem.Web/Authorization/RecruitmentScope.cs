@@ -84,6 +84,26 @@ public sealed class RecruitmentScope
                     interview.JobApplication.JobPosting.Position.DepartmentId == DepartmentId.Value);
     }
 
+    public IQueryable<Offer> ApplyToOffers(IQueryable<Offer> query)
+    {
+        if (IsUnrestricted)
+        {
+            return query;
+        }
+
+        if (ResponsibleUserId is not null)
+        {
+            return query.Where(
+                offer => offer.JobApplication.JobPosting.ResponsibleUserId == ResponsibleUserId);
+        }
+
+        return DepartmentId is null
+            ? query.Where(_ => false)
+            : query.Where(
+                offer =>
+                    offer.JobApplication.JobPosting.Position.DepartmentId == DepartmentId.Value);
+    }
+
     public bool Includes(JobPosting jobPosting)
     {
         if (IsUnrestricted)
