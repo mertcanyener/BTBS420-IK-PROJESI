@@ -595,6 +595,152 @@ public sealed class OffersSqlServerIntegrationTests : IClassFixture<TestWebAppli
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Submit_EszamanliIkiIstektenYalnizBiriBasariliOlur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, recruiterId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+
+        using var client1 = CreateClient(factory);
+        using var client2 = CreateClient(factory);
+        var token1 = await GetAntiforgeryTokenForRoleAsync(
+            client1, $"/Offers/Edit/{offerId}", SystemRoles.RecruitmentSpecialist, recruiterId);
+        var token2 = await GetAntiforgeryTokenForRoleAsync(
+            client2, $"/Offers/Edit/{offerId}", SystemRoles.RecruitmentSpecialist, recruiterId);
+
+        var responses = await Task.WhenAll(
+            SubmitOfferWithTokenAsync(client1, SystemRoles.RecruitmentSpecialist, recruiterId, offerId, token1),
+            SubmitOfferWithTokenAsync(client2, SystemRoles.RecruitmentSpecialist, recruiterId, offerId, token2));
+
+        var redirectCount = responses.Count(response => response.StatusCode == HttpStatusCode.Redirect);
+        Assert.Equal(2, redirectCount);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.PendingManagerApproval, offer.Status);
+
+        var statusChangeCount = await verifyContext.OfferStatusChanges
+            .CountAsync(c => c.OfferId == offerId && c.ToStatus == OfferStatuses.PendingManagerApproval);
+        Assert.Equal(1, statusChangeCount);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Approve_EszamanliIkiIstektenYalnizBiriBasariliOlur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan27-approve-race-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        using var client1 = CreateClient(factory);
+        using var client2 = CreateClient(factory);
+        var token1 = await GetAntiforgeryTokenForRoleAsync(
+            client1, $"/Offers/Edit/{offerId}", SystemRoles.HiringManager, managerId);
+        var token2 = await GetAntiforgeryTokenForRoleAsync(
+            client2, $"/Offers/Edit/{offerId}", SystemRoles.HiringManager, managerId);
+
+        var responses = await Task.WhenAll(
+            ApproveOfferWithTokenAsync(client1, SystemRoles.HiringManager, managerId, offerId, token1),
+            ApproveOfferWithTokenAsync(client2, SystemRoles.HiringManager, managerId, offerId, token2));
+
+        var redirectCount = responses.Count(response => response.StatusCode == HttpStatusCode.Redirect);
+        Assert.Equal(2, redirectCount);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.Equal(OfferStatuses.Approved, offer.Status);
+
+        var approvedCount = await verifyContext.OfferStatusChanges
+            .CountAsync(c => c.OfferId == offerId && c.ToStatus == OfferStatuses.Approved);
+        Assert.Equal(1, approvedCount);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task ApproveReject_EszamanliIkiIstektenBiriKazanirTekKararKaydiUretir()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, recruiterId) =
+            await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+        await SetApplicationStatusAsync(applicationId, ApplicationStatuses.Interview);
+        var managerId = await CreateHiringManagerUserAsync(factory, $"kan27-decision-race-{runId}", departmentId);
+
+        using var recruiterClient = CreateClient(factory);
+        await CreateOfferAsync(
+            recruiterClient,
+            SystemRoles.RecruitmentSpecialist,
+            recruiterId,
+            applicationId,
+            50000m,
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            null);
+
+        await using var context = CreateRawContext();
+        var offerId = (await context.Offers.SingleAsync(o => o.JobApplicationId == applicationId)).Id;
+        await SubmitOfferAsync(recruiterClient, SystemRoles.RecruitmentSpecialist, recruiterId, offerId);
+
+        using var approveClient = CreateClient(factory);
+        using var rejectClient = CreateClient(factory);
+        var approveToken = await GetAntiforgeryTokenForRoleAsync(
+            approveClient, $"/Offers/Edit/{offerId}", SystemRoles.HiringManager, managerId);
+        var rejectToken = await GetAntiforgeryTokenForRoleAsync(
+            rejectClient, $"/Offers/Edit/{offerId}", SystemRoles.HiringManager, managerId);
+
+        var responses = await Task.WhenAll(
+            ApproveOfferWithTokenAsync(approveClient, SystemRoles.HiringManager, managerId, offerId, approveToken),
+            RejectOfferWithTokenAsync(
+                rejectClient, SystemRoles.HiringManager, managerId, offerId, "Bütçe uygun değil.", rejectToken));
+
+        var redirectCount = responses.Count(response => response.StatusCode == HttpStatusCode.Redirect);
+        Assert.Equal(2, redirectCount);
+
+        await using var verifyContext = CreateRawContext();
+        var offer = await verifyContext.Offers.SingleAsync(o => o.Id == offerId);
+        Assert.True(offer.Status is OfferStatuses.Approved or OfferStatuses.RejectedByManager);
+
+        var decisionCount = await verifyContext.OfferStatusChanges.CountAsync(
+            c => c.OfferId == offerId &&
+                 (c.ToStatus == OfferStatuses.Approved || c.ToStatus == OfferStatuses.RejectedByManager));
+        Assert.Equal(1, decisionCount);
+    }
+
     private static async Task SetApplicationStatusAsync(int applicationId, string status)
     {
         await using var context = CreateRawContext();
@@ -718,6 +864,60 @@ public sealed class OffersSqlServerIntegrationTests : IClassFixture<TestWebAppli
     {
         var token = await GetAntiforgeryTokenForRoleAsync(client, $"/Offers/Edit/{offerId}", role, userId);
 
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Reject/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+
+        var formFields = new Dictionary<string, string> { ["__RequestVerificationToken"] = token };
+        if (reason is not null)
+        {
+            formFields["reason"] = reason;
+        }
+
+        request.Content = new FormUrlEncodedContent(formFields);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SubmitOfferWithTokenAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int offerId,
+        string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Submit/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> ApproveOfferWithTokenAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int offerId,
+        string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Approve/{offerId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> RejectOfferWithTokenAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int offerId,
+        string? reason,
+        string token)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/Offers/Reject/{offerId}");
         request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
         request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);

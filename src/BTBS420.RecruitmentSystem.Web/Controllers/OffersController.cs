@@ -375,8 +375,10 @@ public sealed class OffersController(
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateException)
         {
+            // RowVersion çakışmasına ek olarak, eşzamanlı ikinci onay isteği aynı
+            // bildirim anahtarında unique index ihlaline de yol açabilir (DbUpdateException).
             TempData["StatusMessage"] = ConcurrencyConflictMessage;
             return RedirectToAction(nameof(Edit), new { id });
         }
