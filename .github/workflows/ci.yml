@@ -16,9 +16,24 @@ jobs:
     name: Restore, build and test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "CiTest_P@ssw0rd2026!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd="/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'CiTest_P@ssw0rd2026!' -Q 'SELECT 1' || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=30s
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "true"
+      CI_SQLSERVER_CONNECTION_STRING: "Server=127.0.0.1,1433;Database=BTBS420_Test;User Id=sa;Password=CiTest_P@ssw0rd2026!;TrustServerCertificate=True;"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -34,5 +49,37 @@ jobs:
       - name: Build
         run: dotnet build BTBS420.RecruitmentSystem.sln --configuration Release --no-restore
 
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Apply test database migrations
+        env:
+          ConnectionStrings__DefaultConnection: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+        run: >-
+          dotnet ef database update
+          --project src/BTBS420.RecruitmentSystem.Web
+          --startup-project src/BTBS420.RecruitmentSystem.Web
+
       - name: Test
+        env:
+          KAN23_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN30_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN31_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN32_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN33_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN34_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN35_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN36_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN37_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN38_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN39_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN40_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN45_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN46_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN61_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN65_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN66_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN67_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN68_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
+          KAN94_TEST_SQLSERVER_CONNECTION_STRING: ${{ env.CI_SQLSERVER_CONNECTION_STRING }}
         run: dotnet test BTBS420.RecruitmentSystem.sln --configuration Release --no-build --no-restore
