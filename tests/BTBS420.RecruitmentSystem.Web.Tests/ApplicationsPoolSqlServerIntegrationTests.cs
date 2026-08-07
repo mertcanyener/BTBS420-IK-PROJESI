@@ -1320,6 +1320,117 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
         Assert.Equal(0, notificationCount);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Details_YeniBasvurudaSadeceOnElemeyeAlButonuGorunur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var body = await GetDetailsBodyAsync(
+            factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Contains($"action=\"/ApplicationsPool/MoveToScreening/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/MoveToInterview/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Reject/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Reevaluate/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Archive/{applicationId}\"", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_OnElemedekiBasvurudaMulakataAlVeReddetButonlariGorunur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using (var setupContext = CreateRawContext())
+        {
+            await setupContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE JobApplications SET Status = {ApplicationStatuses.Screening} WHERE Id = {applicationId}");
+        }
+
+        var body = await GetDetailsBodyAsync(
+            factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Contains($"action=\"/ApplicationsPool/MoveToInterview/{applicationId}\"", body);
+        Assert.Contains($"action=\"/ApplicationsPool/Reject/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/MoveToScreening/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Reevaluate/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Archive/{applicationId}\"", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_ReddedilmisBasvurudaYenidenDegerlendirVeArsivleButonlariGorunur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using (var setupContext = CreateRawContext())
+        {
+            await setupContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE JobApplications SET Status = {ApplicationStatuses.Rejected} WHERE Id = {applicationId}");
+        }
+
+        var body = await GetDetailsBodyAsync(
+            factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Contains($"action=\"/ApplicationsPool/Reevaluate/{applicationId}\"", body);
+        Assert.Contains($"action=\"/ApplicationsPool/Archive/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/MoveToScreening/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/MoveToInterview/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Reject/{applicationId}\"", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_MulakattakiBasvurudaMulakataAlButonuGorunmez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        await using (var setupContext = CreateRawContext())
+        {
+            await setupContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE JobApplications SET Status = {ApplicationStatuses.Interview} WHERE Id = {applicationId}");
+        }
+
+        var body = await GetDetailsBodyAsync(
+            factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Contains($"action=\"/ApplicationsPool/Reject/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/MoveToInterview/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/MoveToScreening/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Reevaluate/{applicationId}\"", body);
+        Assert.DoesNotContain($"action=\"/ApplicationsPool/Archive/{applicationId}\"", body);
+    }
+
+    private static async Task<string> GetDetailsBodyAsync(
+        WebApplicationFactory<Program> factory,
+        string role,
+        string userId,
+        int applicationId)
+    {
+        using var client = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/ApplicationsPool/Details/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
     private static async Task<int> CreateCandidateApplicationAsync(
         WebApplicationFactory<Program> factory,
         string candidateId,

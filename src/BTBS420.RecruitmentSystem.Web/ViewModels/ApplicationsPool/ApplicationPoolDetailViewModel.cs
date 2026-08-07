@@ -22,4 +22,9 @@ public sealed record ApplicationPoolDetailViewModel(
     IReadOnlyList<ApplicationTimelineEntryViewModel> Timeline,
     IReadOnlyList<InterviewSummaryViewModel> Interviews,
     bool CanScheduleInterview,
-    IReadOnlyList<ParticipantOptionViewModel> ParticipantOptions);
+    IReadOnlyList<ParticipantOptionViewModel> ParticipantOptions,
+    bool CanMoveToScreening,
+    bool CanMoveToInterview,
+    bool CanReject,
+    bool CanReevaluate,
+    bool CanArchive);

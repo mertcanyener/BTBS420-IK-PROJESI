@@ -223,6 +223,55 @@
             </div>
         </div>
 
+        @if (Model.CanMoveToScreening || Model.CanMoveToInterview || Model.CanReject || Model.CanReevaluate || Model.CanArchive)
+        {
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 mb-3">İşlemler</h2>
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (Model.CanMoveToScreening)
+                        {
+                            <form asp-controller="ApplicationsPool" asp-action="MoveToScreening" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+                                <button type="submit" class="btn btn-outline-primary">Ön Elemeye Al</button>
+                            </form>
+                        }
+                        @if (Model.CanMoveToInterview)
+                        {
+                            <form asp-controller="ApplicationsPool" asp-action="MoveToInterview" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+                                <button type="submit" class="btn btn-outline-primary">Mülakata Al</button>
+                            </form>
+                        }
+                        @if (Model.CanArchive)
+                        {
+                            <form asp-controller="ApplicationsPool" asp-action="Archive" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+                                <button type="submit" class="btn btn-outline-secondary">Arşivle</button>
+                            </form>
+                        }
+                    </div>
+                    @if (Model.CanReject)
+                    {
+                        <form asp-controller="ApplicationsPool" asp-action="Reject" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mt-3">
+                            <div class="mb-2">
+                                <label class="form-label">Ret Gerekçesi</label>
+                                <textarea class="form-control" name="reason" rows="2" placeholder="Gerekçe (opsiyonel)..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-outline-danger">Başvuruyu Reddet</button>
+                        </form>
+                    }
+                    @if (Model.CanReevaluate)
+                    {
+                        <form asp-controller="ApplicationsPool" asp-action="Reevaluate" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mt-3">
+                            <div class="mb-2">
+                                <label class="form-label">Yeniden Değerlendirme Gerekçesi</label>
+                                <textarea class="form-control" name="reason" rows="2" placeholder="Gerekçe belirtin..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-outline-primary">Yeniden Değerlendirmeye Al</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-body p-4">
                 <h2 class="h5 mb-3">Notlar</h2>

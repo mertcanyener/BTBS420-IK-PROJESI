@@ -1114,6 +1114,24 @@ public sealed class ApplicationsPoolController(
             ? await BuildParticipantOptionsAsync(cancellationToken)
             : [];
 
+        var canManageStatus =
+            User.IsInRole(SystemRoles.Admin) ||
+            User.IsInRole(SystemRoles.RecruitmentSpecialist) ||
+            User.IsInRole(SystemRoles.HiringManager);
+
+        var canMoveToScreening =
+            canManageStatus && application.Status == ApplicationStatuses.New;
+        var canMoveToInterview =
+            canManageStatus && ApplicationStatuses.IsValidTransition(application.Status, ApplicationStatuses.Interview);
+        var canReject =
+            canManageStatus && ApplicationStatuses.IsValidTransition(application.Status, ApplicationStatuses.Rejected);
+        var canReevaluate =
+            canManageStatus && application.Status == ApplicationStatuses.Rejected;
+        var canArchive =
+            canManageStatus &&
+            !application.IsArchived &&
+            (application.Status == ApplicationStatuses.Rejected || application.Status == ApplicationStatuses.Withdrawn);
+
         return new ApplicationPoolDetailViewModel(
             application.Id,
             ApplicationStatuses.GetDisplayLabel(application.Status),
@@ -1136,7 +1154,12 @@ public sealed class ApplicationsPoolController(
             timelineViewModels,
             interviews,
             canScheduleInterview,
-            participantOptions);
+            participantOptions,
+            canMoveToScreening,
+            canMoveToInterview,
+            canReject,
+            canReevaluate,
+            canArchive);
     }
 
     private async Task<IReadOnlyList<ParticipantOptionViewModel>> BuildParticipantOptionsAsync(
