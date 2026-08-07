@@ -174,8 +174,12 @@ html {
 body {
   margin-bottom: 60px;
   background-color: var(--color-bg);
-  background-image: radial-gradient(ellipse 1200px 500px at 50% -10%, rgba(22, 50, 79, 0.05), transparent 60%);
+  background-image:
+    radial-gradient(ellipse 900px 700px at 8% 0%, rgba(180, 190, 240, 0.05), transparent 65%),
+    radial-gradient(ellipse 900px 700px at 95% 5%, rgba(250, 200, 210, 0.04), transparent 65%),
+    radial-gradient(ellipse 1100px 800px at 45% 100%, rgba(200, 240, 220, 0.04), transparent 65%);
   background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
