@@ -27,4 +27,7 @@ public sealed record ApplicationPoolDetailViewModel(
     bool CanMoveToInterview,
     bool CanReject,
     bool CanReevaluate,
-    bool CanArchive);
+    bool CanArchive,
+    bool CanCreateOffer,
+    int? OfferId,
+    string? OfferStatusLabel);

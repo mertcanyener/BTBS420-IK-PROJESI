@@ -223,7 +223,7 @@
             </div>
         </div>
 
-        @if (Model.CanMoveToScreening || Model.CanMoveToInterview || Model.CanReject || Model.CanReevaluate || Model.CanArchive)
+        @if (Model.CanMoveToScreening || Model.CanMoveToInterview || Model.CanReject || Model.CanReevaluate || Model.CanArchive || Model.CanCreateOffer || Model.OfferId.HasValue)
         {
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
@@ -240,6 +240,14 @@
                             <form asp-controller="ApplicationsPool" asp-action="MoveToInterview" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
                                 <button type="submit" class="btn btn-outline-primary">Mülakata Al</button>
                             </form>
+                        }
+                        @if (Model.CanCreateOffer)
+                        {
+                            <a class="btn btn-sm btn-primary" asp-controller="Offers" asp-action="Create" asp-route-applicationId="@Model.Id">Teklif Oluştur</a>
+                        }
+                        else if (Model.OfferId.HasValue)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-controller="Offers" asp-action="Edit" asp-route-id="@Model.OfferId">Teklifi Görüntüle (@Model.OfferStatusLabel)</a>
                         }
                         @if (Model.CanArchive)
                         {

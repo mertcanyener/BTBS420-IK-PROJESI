@@ -1132,6 +1132,20 @@ public sealed class ApplicationsPoolController(
             !application.IsArchived &&
             (application.Status == ApplicationStatuses.Rejected || application.Status == ApplicationStatuses.Withdrawn);
 
+        var existingOffer = await dbContext.Offers
+            .Where(offer => offer.JobApplicationId == application.Id)
+            .Select(offer => new { offer.Id, offer.Status })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var canCreateOffer =
+            canScheduleInterview &&
+            application.Status == ApplicationStatuses.Interview &&
+            existingOffer is null;
+        var offerId = existingOffer?.Id;
+        var offerStatusLabel = existingOffer is not null
+            ? OfferStatuses.GetDisplayLabel(existingOffer.Status)
+            : null;
+
         return new ApplicationPoolDetailViewModel(
             application.Id,
             ApplicationStatuses.GetDisplayLabel(application.Status),
@@ -1159,7 +1173,10 @@ public sealed class ApplicationsPoolController(
             canMoveToInterview,
             canReject,
             canReevaluate,
-            canArchive);
+            canArchive,
+            canCreateOffer,
+            offerId,
+            offerStatusLabel);
     }
 
     private async Task<IReadOnlyList<ParticipantOptionViewModel>> BuildParticipantOptionsAsync(

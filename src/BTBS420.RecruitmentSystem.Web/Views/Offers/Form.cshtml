@@ -10,6 +10,8 @@
 
 <h1 class="h3 mb-4">@ViewData["Title"]</h1>
 
+<a class="btn btn-outline-secondary mb-3" asp-controller="ApplicationsPool" asp-action="Details" asp-route-id="@Model.JobApplicationId">Başvuruya Dön</a>
+
 <dl class="row">
     <dt class="col-sm-3">Aday</dt>
     <dd class="col-sm-9">@Model.CandidateName</dd>
