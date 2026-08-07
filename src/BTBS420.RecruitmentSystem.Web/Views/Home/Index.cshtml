@@ -1,14 +1,13 @@
-﻿@{
+@{
     ViewData["Title"] = "Ana Sayfa";
 }
 
 <section class="hero rounded-4 p-4 p-md-5 mb-4" aria-labelledby="page-title">
     <div class="row align-items-center g-4">
         <div class="col-lg-8">
-            <span class="badge text-bg-light text-primary mb-3">BTBS420</span>
             <h1 id="page-title" class="display-5 fw-bold">İşe Alım ve Aday Takip Sistemi</h1>
             <p class="lead mb-0">
-                İş ilanı, aday ve işe alım süreçlerinin tek bir güvenli platform üzerinden yönetilmesi için hazırlanan uygulama altyapısı.
+                İş ilanlarınızı yayınlayın, adayları değerlendirin ve işe alım sürecinizi baştan sona tek yerden yönetin.
             </p>
         </div>
         <div class="col-lg-4 text-lg-end">
@@ -17,32 +16,102 @@
     </div>
 </section>
 
-<section aria-labelledby="platform-title">
-    <h2 id="platform-title" class="h4 mb-3">Platform altyapısı hazır</h2>
-    <div class="row g-3">
-        <div class="col-12 col-md-4">
-            <article class="card h-100 border-0 shadow-sm">
-                <div class="card-body">
-                    <h3 class="h5 card-title">Duyarlı arayüz</h3>
-                    <p class="card-text text-body-secondary mb-0">Bootstrap tabanlı ortak kabuk farklı ekran boyutlarına uyum sağlar.</p>
+@if (User.Identity?.IsAuthenticated == true)
+{
+    @if (User.IsInRole("Aday"))
+    {
+        <section aria-labelledby="actions-title">
+            <h2 id="actions-title" class="h4 mb-3">Sizin İçin</h2>
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <article class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 card-title">Açık Pozisyonlara Göz Atın</h3>
+                            <p class="card-text text-body-secondary">Size uygun iş ilanlarını inceleyin ve hemen başvurun.</p>
+                            <a class="btn btn-primary mt-auto align-self-start" asp-controller="PublicJobPostings" asp-action="Index">İlanları Görüntüle</a>
+                        </div>
+                    </article>
                 </div>
-            </article>
-        </div>
-        <div class="col-12 col-md-4">
-            <article class="card h-100 border-0 shadow-sm">
-                <div class="card-body">
-                    <h3 class="h5 card-title">Modüler yapı</h3>
-                    <p class="card-text text-body-secondary mb-0">ASP.NET Core MVC yapısı yeni işe alım modülleri için açık bir temel sunar.</p>
+                <div class="col-12 col-md-4">
+                    <article class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 card-title">Başvurularınızı Takip Edin</h3>
+                            <p class="card-text text-body-secondary">Başvuru durumunuzu ve mülakat sürecinizi anlık olarak görün.</p>
+                            <a class="btn btn-primary mt-auto align-self-start" asp-controller="JobApplications" asp-action="Index">Başvurularım</a>
+                        </div>
+                    </article>
                 </div>
-            </article>
-        </div>
-        <div class="col-12 col-md-4">
-            <article class="card h-100 border-0 shadow-sm">
-                <div class="card-body">
-                    <h3 class="h5 card-title">Güvenli hata deneyimi</h3>
-                    <p class="card-text text-body-secondary mb-0">Yaygın HTTP hata durumları kullanıcı dostu sayfalarla karşılanır.</p>
+                <div class="col-12 col-md-4">
+                    <article class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 card-title">Profilinizi Tamamlayın</h3>
+                            <p class="card-text text-body-secondary">Eğitim, deneyim ve belgelerinizi güncel tutarak öne çıkın.</p>
+                            <a class="btn btn-primary mt-auto align-self-start" asp-controller="CandidateProfile" asp-action="Index">Profilim</a>
+                        </div>
+                    </article>
                 </div>
-            </article>
+            </div>
+        </section>
+    }
+    else if (User.IsInRole("Admin") || User.IsInRole("İşe Alım Uzmanı") || User.IsInRole("İşe Alım Yöneticisi"))
+    {
+        <section aria-labelledby="actions-title">
+            <h2 id="actions-title" class="h4 mb-3">Sizin İçin</h2>
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <article class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 card-title">İlan Oluşturun</h3>
+                            <p class="card-text text-body-secondary">Yeni bir pozisyon için iş ilanı hazırlayın ve yayınlayın.</p>
+                            <a class="btn btn-primary mt-auto align-self-start" asp-controller="JobPostings" asp-action="Create">İlan Oluştur</a>
+                        </div>
+                    </article>
+                </div>
+                <div class="col-12 col-md-4">
+                    <article class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 card-title">Başvuru Havuzunu Yönetin</h3>
+                            <p class="card-text text-body-secondary">Gelen başvuruları inceleyin, değerlendirin ve süreci ilerletin.</p>
+                            <a class="btn btn-primary mt-auto align-self-start" asp-controller="ApplicationsPool" asp-action="Index">Başvuru Havuzu</a>
+                        </div>
+                    </article>
+                </div>
+                <div class="col-12 col-md-4">
+                    <article class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 card-title">Mülakatları Yönetin</h3>
+                            <p class="card-text text-body-secondary">Planlanan mülakatları görüntüleyin ve sonuçlandırın.</p>
+                            <a class="btn btn-primary mt-auto align-self-start" asp-controller="Interviews" asp-action="Index">Mülakatlar</a>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+    }
+}
+else
+{
+    <section aria-labelledby="actions-title">
+        <h2 id="actions-title" class="h4 mb-3">Nasıl Başlamak İstersiniz?</h2>
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <article class="card h-100 border-0 shadow-sm">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="h5 card-title">Aday mısınız?</h3>
+                        <p class="card-text text-body-secondary">Kayıt olun, profilinizi oluşturun ve açık pozisyonlara başvurun.</p>
+                        <a class="btn btn-primary mt-auto align-self-start" asp-controller="Account" asp-action="Register">Kayıt Ol</a>
+                    </div>
+                </article>
+            </div>
+            <div class="col-12 col-md-6">
+                <article class="card h-100 border-0 shadow-sm">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="h5 card-title">İşe Alım Ekibi Misiniz?</h3>
+                        <p class="card-text text-body-secondary">Giriş yapın, ilanlarınızı ve başvuru süreçlerinizi yönetin.</p>
+                        <a class="btn btn-outline-primary mt-auto align-self-start" asp-controller="Account" asp-action="Login">Giriş Yap</a>
+                    </div>
+                </article>
+            </div>
         </div>
-    </div>
-</section>
+    </section>
+}
