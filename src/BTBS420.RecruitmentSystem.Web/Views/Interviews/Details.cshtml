@@ -43,7 +43,15 @@
             }
 
             <dt class="col-sm-3">Durum</dt>
-            <dd class="col-sm-9"><span class="badge text-bg-secondary">@Model.StatusLabel</span></dd>
+            <dd class="col-sm-9">
+                <span class="status-pill @(Model.StatusLabel switch
+                {
+                    "Planlandı" => "status-interview",
+                    "Tamamlandı" => "status-hired",
+                    "İptal Edildi" => "status-neutral",
+                    _ => "status-neutral"
+                })">@Model.StatusLabel</span>
+            </dd>
 
             <dt class="col-sm-3">Katılımcılar</dt>
             <dd class="col-sm-9">@(Model.ParticipantNames.Count == 0 ? "-" : string.Join(", ", Model.ParticipantNames))</dd>

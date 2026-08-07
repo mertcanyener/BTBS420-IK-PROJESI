@@ -69,7 +69,17 @@ else
                     <td>@jobPosting.DepartmentName</td>
                     <td>@jobPosting.ResponsibleUserName</td>
                     <td>@jobPosting.ApplicationDeadline.ToString("dd.MM.yyyy")</td>
-                    <td><span class="badge text-bg-secondary">@jobPosting.Status</span></td>
+                    <td>
+                        <span class="status-pill @(jobPosting.Status switch
+                        {
+                            "draft" => "status-new",
+                            "published" => "status-interview",
+                            "applications-closed" => "status-offer",
+                            "position-filled" => "status-hired",
+                            "archived" => "status-neutral",
+                            _ => "status-neutral"
+                        })">@jobPosting.Status</span>
+                    </td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-controller="JobPostings" asp-action="Details" asp-route-id="@jobPosting.Id">Detay</a>
                         @if (canManage)

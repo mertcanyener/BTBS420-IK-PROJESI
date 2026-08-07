@@ -20,7 +20,18 @@
     @if (isEdit)
     {
         <dt class="col-sm-3">Durum</dt>
-        <dd class="col-sm-9">@Model.StatusLabel</dd>
+        <dd class="col-sm-9">
+            <span class="status-pill @(Model.StatusLabel switch
+            {
+                "Taslak" => "status-new",
+                "Yönetici Onayı Bekliyor" => "status-offer",
+                "Onaylandı" => "status-hired",
+                "Yönetici Tarafından Reddedildi" => "status-rejected",
+                "Kabul Edildi" => "status-hired",
+                "Aday Tarafından Reddedildi" => "status-rejected",
+                _ => "status-neutral"
+            })">@Model.StatusLabel</span>
+        </dd>
     }
 </dl>
 

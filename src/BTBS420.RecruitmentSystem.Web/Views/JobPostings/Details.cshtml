@@ -32,7 +32,17 @@
             <dd class="col-sm-9">@Model.ApplicationDeadline.ToString("dd.MM.yyyy")</dd>
 
             <dt class="col-sm-3">Durum</dt>
-            <dd class="col-sm-9"><span class="badge text-bg-secondary">@Model.Status</span></dd>
+            <dd class="col-sm-9">
+                <span class="status-pill @(Model.Status switch
+                {
+                    "draft" => "status-new",
+                    "published" => "status-interview",
+                    "applications-closed" => "status-offer",
+                    "position-filled" => "status-hired",
+                    "archived" => "status-neutral",
+                    _ => "status-neutral"
+                })">@Model.Status</span>
+            </dd>
         </dl>
     </div>
 </div>

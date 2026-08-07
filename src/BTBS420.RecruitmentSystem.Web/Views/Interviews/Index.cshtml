@@ -37,7 +37,15 @@ else
                     <td>@interview.InterviewTypeLabel</td>
                     <td>@interview.StartAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
                     <td>@interview.EndAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
-                    <td><span class="badge text-bg-secondary">@interview.StatusLabel</span></td>
+                    <td>
+                        <span class="status-pill @(interview.StatusLabel switch
+                        {
+                            "Planlandı" => "status-interview",
+                            "Tamamlandı" => "status-hired",
+                            "İptal Edildi" => "status-neutral",
+                            _ => "status-neutral"
+                        })">@interview.StatusLabel</span>
+                    </td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-controller="Interviews" asp-action="Details" asp-route-id="@interview.Id">Detay</a>
                     </td>

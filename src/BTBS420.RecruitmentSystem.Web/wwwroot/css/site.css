@@ -1,6 +1,160 @@
+@import url('design-tokens.css');
+
 html {
   font-size: 14px;
 }
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
+
+h1, h2, h3, h4, h5, h6,
+.navbar-brand,
+.card-title {
+  font-family: var(--font-heading);
+}
+
+/* Navbar */
+.navbar.bg-primary {
+  background-color: var(--color-primary) !important;
+}
+
+.navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.nav-link {
+  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: var(--radius-sm);
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link:focus {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.navbar-nav .nav-link.active {
+  font-weight: 600;
+}
+
+.dropdown-item:active,
+.dropdown-item.active {
+  background-color: var(--color-primary);
+}
+
+/* Cards */
+.card {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background-color: var(--color-primary-dark) !important;
+  border-color: var(--color-primary-dark) !important;
+}
+
+.btn-outline-primary {
+  color: var(--color-primary);
+  border-color: var(--color-border);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-accent {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #1B2430;
+}
+
+.btn-accent:hover {
+  filter: brightness(0.94);
+  color: #1B2430;
+}
+
+/* Tables */
+.table thead th {
+  background-color: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+.table > :not(caption) > * > * {
+  border-bottom-color: var(--color-border);
+}
+
+.table tbody tr:hover {
+  background-color: rgba(22, 50, 79, 0.03);
+}
+
+/* Forms */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 0.2rem rgba(22, 50, 79, 0.15);
+}
+
+.form-control,
+.form-select {
+  border-radius: var(--radius-sm);
+  border-color: var(--color-border);
+}
+
+/* Pipeline durum rozeti (İlan / Başvuru / Mülakat / Teklif ortak görsel dili) */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  background-color: color-mix(in srgb, var(--pill-color, var(--status-neutral)) 14%, white);
+  color: color-mix(in srgb, var(--pill-color, var(--status-neutral)) 65%, black);
+}
+
+.status-pill::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 50%;
+  background-color: var(--pill-color, var(--status-neutral));
+}
+
+.status-pill.status-new { --pill-color: var(--status-new); }
+.status-pill.status-screening { --pill-color: var(--status-screening); }
+.status-pill.status-interview { --pill-color: var(--status-interview); }
+.status-pill.status-offer { --pill-color: var(--status-offer); }
+.status-pill.status-hired { --pill-color: var(--status-hired); }
+.status-pill.status-rejected { --pill-color: var(--status-rejected); }
+.status-pill.status-neutral { --pill-color: var(--status-neutral); }
 
 @media (min-width: 768px) {
   html {
