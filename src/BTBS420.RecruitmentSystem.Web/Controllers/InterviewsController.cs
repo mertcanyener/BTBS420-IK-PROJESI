@@ -117,7 +117,10 @@ public sealed class InterviewsController(
             .Select(participant => participant.ParticipantUser.UserName)
             .ToListAsync(cancellationToken);
 
-        var canEdit = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+        var canManageInterview = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.RecruitmentSpecialist);
+        var canEdit = canManageInterview && interview.Status == InterviewStatuses.Scheduled;
+        var canComplete = canManageInterview && InterviewStatuses.IsValidTransition(interview.Status, InterviewStatuses.Completed);
+        var canCancel = canManageInterview && InterviewStatuses.IsValidTransition(interview.Status, InterviewStatuses.Cancelled);
         var canViewEvaluationSummary = !User.IsInRole(SystemRoles.Candidate);
 
         IReadOnlyList<InterviewEvaluationSummaryItemViewModel> evaluationSummary = [];
@@ -176,7 +179,9 @@ public sealed class InterviewsController(
             canViewEvaluationSummary,
             evaluationSummary,
             averageCompetencyScore,
-            averageOverallScore);
+            averageOverallScore,
+            canComplete,
+            canCancel);
 
         return View(model);
     }

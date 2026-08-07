@@ -97,10 +97,22 @@
     </div>
 }
 
-<div class="mt-3">
+<div class="mt-3 d-flex flex-wrap gap-2">
     <a class="btn btn-outline-secondary" asp-controller="Interviews" asp-action="Index">Listeye Dön</a>
     @if (Model.CanEdit)
     {
-        <a class="btn btn-primary" asp-controller="Interviews" asp-action="Edit" asp-route-id="@Model.Id">Düzenle</a>
+        <a class="btn btn-primary" asp-controller="Interviews" asp-action="Edit" asp-route-id="@Model.Id">Düzenle / Ertele</a>
+    }
+    @if (Model.CanComplete)
+    {
+        <form asp-controller="Interviews" asp-action="Complete" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+            <button type="submit" class="btn btn-outline-success">Tamamlandı Olarak İşaretle</button>
+        </form>
+    }
+    @if (Model.CanCancel)
+    {
+        <form asp-controller="Interviews" asp-action="Cancel" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+            <button type="submit" class="btn btn-outline-danger">İptal Et</button>
+        </form>
     }
 </div>

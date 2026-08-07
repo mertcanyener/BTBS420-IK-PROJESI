@@ -17,4 +17,6 @@ public sealed record InterviewDetailViewModel(
     bool CanViewEvaluationSummary,
     IReadOnlyList<InterviewEvaluationSummaryItemViewModel> EvaluationSummary,
     double? AverageCompetencyScore,
-    double? AverageOverallScore);
+    double? AverageOverallScore,
+    bool CanComplete,
+    bool CanCancel);

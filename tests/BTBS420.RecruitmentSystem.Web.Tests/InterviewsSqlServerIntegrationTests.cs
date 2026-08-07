@@ -768,6 +768,92 @@ public sealed class InterviewsSqlServerIntegrationTests : IClassFixture<TestWebA
         Assert.Equal(countBefore, countAfter);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task Details_PlanlandiMulakattaTamamlaVeIptalButonlariGorunur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan97-scheduled", null);
+
+        var body = await GetDetailsBodyAsync(factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId);
+
+        Assert.Contains($"action=\"/Interviews/Complete/{interviewId}\"", body);
+        Assert.Contains($"action=\"/Interviews/Cancel/{interviewId}\"", body);
+        Assert.Contains($"/Interviews/Edit/{interviewId}", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_TamamlanmisMulakattaHicbirIslemButonuGorunmez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan97-completed", null);
+
+        await PostStatusActionAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId, "Complete");
+
+        var body = await GetDetailsBodyAsync(factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId);
+
+        Assert.DoesNotContain($"action=\"/Interviews/Complete/{interviewId}\"", body);
+        Assert.DoesNotContain($"action=\"/Interviews/Cancel/{interviewId}\"", body);
+        Assert.DoesNotContain($"/Interviews/Edit/{interviewId}", body);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task Details_IptalEdilmisMulakattaHicbirIslemButonuGorunmez()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var start = TruncateToMinute(DateTime.UtcNow.AddDays(3));
+        var interviewId = await CreateInterviewAndGetIdAsync(
+            setupClient, responsibleUserId, applicationId, InterviewTypes.Online, start, start.AddHours(1),
+            "https://meet.example.test/kan97-cancelled", null);
+
+        await PostStatusActionAsync(
+            setupClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId, "Cancel");
+
+        var body = await GetDetailsBodyAsync(factory, SystemRoles.RecruitmentSpecialist, responsibleUserId, interviewId);
+
+        Assert.DoesNotContain($"action=\"/Interviews/Complete/{interviewId}\"", body);
+        Assert.DoesNotContain($"action=\"/Interviews/Cancel/{interviewId}\"", body);
+        Assert.DoesNotContain($"/Interviews/Edit/{interviewId}", body);
+    }
+
+    private static async Task<string> GetDetailsBodyAsync(
+        WebApplicationFactory<Program> factory,
+        string role,
+        string userId,
+        int interviewId)
+    {
+        using var client = CreateClient(factory);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/Interviews/Details/{interviewId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
     private static async Task<HttpResponseMessage> CreateEvaluationAsync(
         HttpClient client,
         string panelistId,
