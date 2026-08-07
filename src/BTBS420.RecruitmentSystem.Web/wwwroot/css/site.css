@@ -173,7 +173,9 @@ html {
 
 body {
   margin-bottom: 60px;
-  background-color: #f7f9fc;
+  background-color: var(--color-bg);
+  background-image: radial-gradient(ellipse 1200px 500px at 50% -10%, rgba(22, 50, 79, 0.05), transparent 60%);
+  background-repeat: no-repeat;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
@@ -195,8 +197,28 @@ body {
 }
 
 .hero {
+  position: relative;
+  overflow: hidden;
   color: #fff;
-  background: linear-gradient(135deg, #0d6efd 0%, #084298 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #1E4A73 50%, var(--color-primary-dark) 100%);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  top: -35%;
+  right: -10%;
+  width: 26rem;
+  height: 26rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0.12;
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+.hero > * {
+  position: relative;
 }
 
 .hero-mark {
