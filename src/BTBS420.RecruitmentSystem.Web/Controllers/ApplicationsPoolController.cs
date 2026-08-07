@@ -51,6 +51,10 @@ public sealed class ApplicationsPoolController(
 
     private const string ApplicationArchivedMessage = "Başvuru arşivlendi.";
 
+    private const string ApplicationMovedToScreeningMessage = "Başvuru ön elemeye alındı.";
+
+    private const string ApplicationMovedToInterviewMessage = "Başvuru mülakat aşamasına alındı.";
+
     private const string ReevaluateReasonRequiredMessage =
         "Yeniden değerlendirme için bir gerekçe belirtmelisiniz.";
 
@@ -423,6 +427,142 @@ public sealed class ApplicationsPoolController(
         }
 
         TempData["StatusMessage"] = ApplicationArchivedMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MoveToScreening(int id, CancellationToken cancellationToken)
+    {
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        JobApplicationStatusChange statusChange;
+        try
+        {
+            statusChange = application.TransitionTo(
+                ApplicationStatuses.Screening,
+                actorUserId,
+                reason: null,
+                timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        dbContext.JobApplicationStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Personel başvuruyu ön elemeye aldı.",
+                ActivityEntityTypes.Application,
+                application.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: application.CandidateProfile.ApplicationUserId));
+
+        await StageStatusChangeNotificationAsync(application, statusChange, cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = ApplicationMovedToScreeningMessage;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MoveToInterview(int id, CancellationToken cancellationToken)
+    {
+        var application = await dbContext.JobApplications
+            .Include(candidateApplication => candidateApplication.JobPosting)
+            .ThenInclude(jobPosting => jobPosting.Position)
+            .Include(candidateApplication => candidateApplication.CandidateProfile)
+            .FirstOrDefaultAsync(candidateApplication => candidateApplication.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return NotFound();
+        }
+
+        if (!await IsAuthorizedForApplicationAsync(application.JobPosting))
+        {
+            return NotFound();
+        }
+
+        var actorUserId = userManager.GetUserId(User);
+        if (actorUserId is null)
+        {
+            return Forbid();
+        }
+
+        JobApplicationStatusChange statusChange;
+        try
+        {
+            statusChange = application.TransitionTo(
+                ApplicationStatuses.Interview,
+                actorUserId,
+                reason: null,
+                timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["StatusMessage"] = exception.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        dbContext.JobApplicationStatusChanges.Add(statusChange);
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.EntityStatusChanged,
+                "Personel başvuruyu mülakat aşamasına aldı.",
+                ActivityEntityTypes.Application,
+                application.Id.ToString(),
+                JobPostingId: application.JobPostingId.ToString(),
+                CandidateId: application.CandidateProfile.ApplicationUserId));
+
+        await StageStatusChangeNotificationAsync(application, statusChange, cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            TempData["StatusMessage"] = StatusChangeConcurrencyConflictMessage;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        TempData["StatusMessage"] = ApplicationMovedToInterviewMessage;
         return RedirectToAction(nameof(Details), new { id });
     }
 

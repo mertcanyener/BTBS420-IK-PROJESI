@@ -18,8 +18,8 @@ public static class ApplicationStatuses
     private static readonly IReadOnlyDictionary<string, FrozenSet<string>> AllowedTransitions =
         new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
         {
-            [New] = new[] { Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
-            [Screening] = new[] { Withdrawn, Rejected }.ToFrozenSet(StringComparer.Ordinal),
+            [New] = new[] { Screening, Withdrawn }.ToFrozenSet(StringComparer.Ordinal),
+            [Screening] = new[] { Interview, Withdrawn, Rejected }.ToFrozenSet(StringComparer.Ordinal),
             [Interview] = new[] { Withdrawn, Rejected, Hired }.ToFrozenSet(StringComparer.Ordinal),
             [Rejected] = new[] { Screening }.ToFrozenSet(StringComparer.Ordinal),
             [Withdrawn] = FrozenSet<string>.Empty,

@@ -1183,6 +1183,143 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
         Assert.DoesNotContain($"Kan51-Dept-{runId}-Other", body);
     }
 
+    [SqlServerIntegrationFact]
+    public async Task MoveToScreening_GecerliGecisBasariliVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        using var specialistClient = CreateClient(factory);
+        var response = await MoveToScreeningAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .Include(a => a.JobPosting)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Screening, application.Status);
+
+        var change = await context.JobApplicationStatusChanges
+            .SingleAsync(c => c.JobApplicationId == applicationId);
+        Assert.Equal(ApplicationStatuses.New, change.FromStatus);
+        Assert.Equal(ApplicationStatuses.Screening, change.ToStatus);
+        Assert.Equal(responsibleUserId, change.ActorUserId);
+
+        var log = await context.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.EntityStatusChanged &&
+                    l.TargetEntityType == ActivityEntityTypes.Application &&
+                    l.TargetEntityId == applicationId.ToString())
+            .FirstOrDefaultAsync();
+        Assert.NotNull(log);
+
+        var notification = await context.Notifications
+            .SingleOrDefaultAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+        Assert.NotNull(notification);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.New), notification.Message);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.Screening), notification.Message);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task MoveToScreening_KapsamDisindakiUzmanTasiyamazNotFoundDoner()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, departmentId, _) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        var otherRecruiterId = await CreateRecruiterUserAsync(
+            factory, $"kan97-screening-intruder-{runId}", departmentId);
+
+        using var otherClient = CreateClient(factory);
+        var (ownJobPostingId, _, _) = await CreatePublishedJobPostingAsync(
+            otherClient, factory, $"{runId}-own", otherRecruiterId);
+        await CreateApplicationAsync(factory, otherClient, $"{runId}-own", ownJobPostingId);
+
+        var response = await MoveToScreeningAsync(
+            otherClient, SystemRoles.RecruitmentSpecialist, otherRecruiterId, applicationId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications.SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.New, application.Status);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task MoveToInterview_GecerliGecisBasariliVeAuditKaydeder()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        using var specialistClient = CreateClient(factory);
+        await MoveToScreeningAsync(specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        var response = await MoveToInterviewAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.Interview, application.Status);
+
+        var change = await context.JobApplicationStatusChanges
+            .Where(c => c.JobApplicationId == applicationId && c.ToStatus == ApplicationStatuses.Interview)
+            .SingleAsync();
+        Assert.Equal(ApplicationStatuses.Screening, change.FromStatus);
+
+        var notification = await context.Notifications
+            .Where(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId)
+            .OrderByDescending(n => n.Id)
+            .FirstOrDefaultAsync();
+        Assert.NotNull(notification);
+        Assert.Contains(ApplicationStatuses.GetDisplayLabel(ApplicationStatuses.Interview), notification.Message);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task MoveToInterview_YeniBasvuruDogrudanGecemezBasarisizOlur()
+    {
+        using var factory = CreateSqlFactory();
+        var runId = Guid.NewGuid().ToString("N");
+        using var setupClient = CreateClient(factory);
+        var (jobPostingId, _, responsibleUserId) = await CreatePublishedJobPostingAsync(setupClient, factory, runId);
+        var applicationId = await CreateApplicationAsync(factory, setupClient, runId, jobPostingId);
+
+        using var specialistClient = CreateClient(factory);
+        var response = await MoveToInterviewAsync(
+            specialistClient, SystemRoles.RecruitmentSpecialist, responsibleUserId, applicationId);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        await using var context = CreateRawContext();
+        var application = await context.JobApplications
+            .Include(a => a.CandidateProfile)
+            .SingleAsync(a => a.Id == applicationId);
+        Assert.Equal(ApplicationStatuses.New, application.Status);
+
+        var changeCount = await context.JobApplicationStatusChanges
+            .CountAsync(c => c.JobApplicationId == applicationId);
+        Assert.Equal(0, changeCount);
+
+        var notificationCount = await context.Notifications
+            .CountAsync(n => n.RecipientUserId == application.CandidateProfile.ApplicationUserId);
+        Assert.Equal(0, notificationCount);
+    }
+
     private static async Task<int> CreateCandidateApplicationAsync(
         WebApplicationFactory<Program> factory,
         string candidateId,
@@ -1398,6 +1535,44 @@ public sealed class ApplicationsPoolSqlServerIntegrationTests :
             client, $"/ApplicationsPool/Details/{applicationId}", role, userId);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/ApplicationsPool/Archive/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> MoveToScreeningAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int applicationId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, $"/ApplicationsPool/Details/{applicationId}", role, userId);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/ApplicationsPool/MoveToScreening/{applicationId}");
+        request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
+        request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> MoveToInterviewAsync(
+        HttpClient client,
+        string role,
+        string userId,
+        int applicationId)
+    {
+        var token = await GetAntiforgeryTokenForRoleAsync(
+            client, $"/ApplicationsPool/Details/{applicationId}", role, userId);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/ApplicationsPool/MoveToInterview/{applicationId}");
         request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, role);
         request.Headers.Add(TestAuthenticationHandler.UserIdHeaderName, userId);
         request.Content = new FormUrlEncodedContent(
