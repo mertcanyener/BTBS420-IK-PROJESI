@@ -97,6 +97,54 @@
     </div>
 }
 
+@if (Model.CanAddEvaluation)
+{
+    <div class="card border-0 shadow-sm mt-3">
+        <div class="card-body p-4">
+            <h2 class="h5 mb-3">Değerlendirme Ekle</h2>
+            <form asp-controller="InterviewEvaluations" asp-action="Create" method="post" asp-antiforgery="true">
+                <input type="hidden" name="interviewId" value="@Model.Id" />
+                <div class="mb-2">
+                    <label class="form-label">Not</label>
+                    <textarea class="form-control" name="note" rows="3"></textarea>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4 mb-2">
+                        <label class="form-label">Yetkinlik Puanı</label>
+                        <select class="form-select" name="competencyScore" required>
+                            @for (var score = 1; score <= 5; score++)
+                            {
+                                <option value="@score">@score</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-4 mb-2">
+                        <label class="form-label">Genel Puan</label>
+                        <select class="form-select" name="overallScore" required>
+                            @for (var score = 1; score <= 5; score++)
+                            {
+                                <option value="@score">@score</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-4 mb-2">
+                        <label class="form-label">Öneri</label>
+                        <select class="form-select" name="recommendation" required>
+                            <option value="positive">Olumlu</option>
+                            <option value="negative">Olumsuz</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Değerlendirmeyi Kaydet</button>
+            </form>
+        </div>
+    </div>
+}
+else if (Model.HasEvaluated)
+{
+    <div class="alert alert-success mt-3" role="status">Değerlendirmeniz kaydedildi.</div>
+}
+
 <div class="mt-3 d-flex flex-wrap gap-2">
     <a class="btn btn-outline-secondary" asp-controller="Interviews" asp-action="Index">Listeye Dön</a>
     @if (Model.CanEdit)

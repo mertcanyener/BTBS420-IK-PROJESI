@@ -19,4 +19,6 @@ public sealed record InterviewDetailViewModel(
     double? AverageCompetencyScore,
     double? AverageOverallScore,
     bool CanComplete,
-    bool CanCancel);
+    bool CanCancel,
+    bool CanAddEvaluation,
+    bool HasEvaluated);

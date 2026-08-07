@@ -123,6 +123,13 @@ public sealed class InterviewsController(
         var canCancel = canManageInterview && InterviewStatuses.IsValidTransition(interview.Status, InterviewStatuses.Cancelled);
         var canViewEvaluationSummary = !User.IsInRole(SystemRoles.Candidate);
 
+        var currentUserId = userManager.GetUserId(User);
+        var isParticipant = currentUserId is not null && await dbContext.InterviewParticipants
+            .AnyAsync(p => p.InterviewId == interview.Id && p.ParticipantUserId == currentUserId, cancellationToken);
+        var hasEvaluated = currentUserId is not null && await dbContext.InterviewEvaluations
+            .AnyAsync(e => e.InterviewId == interview.Id && e.EvaluatorUserId == currentUserId, cancellationToken);
+        var canAddEvaluation = isParticipant && !hasEvaluated;
+
         IReadOnlyList<InterviewEvaluationSummaryItemViewModel> evaluationSummary = [];
         double? averageCompetencyScore = null;
         double? averageOverallScore = null;
@@ -181,7 +188,9 @@ public sealed class InterviewsController(
             averageCompetencyScore,
             averageOverallScore,
             canComplete,
-            canCancel);
+            canCancel,
+            canAddEvaluation,
+            hasEvaluated);
 
         return View(model);
     }
