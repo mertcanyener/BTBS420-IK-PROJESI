@@ -6,4 +6,7 @@ public sealed record PositionAnalysisResult(
     string PositionTitle,
     string? SeniorityLevelName,
     int? SeniorityRank,
-    string RequirementsSummary);
+    string RequirementsSummary,
+    string RoleFamily,
+    IReadOnlyList<RoleResponsibilityExpectation> ResponsibilityExpectations,
+    string ImportanceRationale);

@@ -1,5 +1,7 @@
 using BTBS420.RecruitmentSystem.Web.ActivityLogging;
 using BTBS420.RecruitmentSystem.Web.Ai;
+using BTBS420.RecruitmentSystem.Web.Ai.Evaluation;
+using BTBS420.RecruitmentSystem.Web.Ai.Evaluation.PositionAnalysis;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Identity;
@@ -81,6 +83,7 @@ builder.Services.AddScoped<IRecruitmentScopeService, RecruitmentScopeService>();
 builder.Services.Configure<AiEvaluationOptions>(
     builder.Configuration.GetSection(AiEvaluationOptions.SectionName));
 builder.Services.AddScoped<IAiEvaluationClient, NoOpAiEvaluationClient>();
+builder.Services.AddScoped<IPositionAnalysisService, PositionAnalysisService>();
 
 var app = builder.Build();
 
