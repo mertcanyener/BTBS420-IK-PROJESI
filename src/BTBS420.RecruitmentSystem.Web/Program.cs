@@ -1,4 +1,5 @@
 using BTBS420.RecruitmentSystem.Web.ActivityLogging;
+using BTBS420.RecruitmentSystem.Web.Ai;
 using BTBS420.RecruitmentSystem.Web.Authorization;
 using BTBS420.RecruitmentSystem.Web.Data;
 using BTBS420.RecruitmentSystem.Web.Identity;
@@ -77,6 +78,9 @@ builder.Services.Configure<CandidateDocumentStorageOptions>(
     builder.Configuration.GetSection(CandidateDocumentStorageOptions.SectionName));
 builder.Services.AddScoped<ICandidateDocumentStorageService, FileSystemCandidateDocumentStorageService>();
 builder.Services.AddScoped<IRecruitmentScopeService, RecruitmentScopeService>();
+builder.Services.Configure<AiEvaluationOptions>(
+    builder.Configuration.GetSection(AiEvaluationOptions.SectionName));
+builder.Services.AddScoped<IAiEvaluationClient, NoOpAiEvaluationClient>();
 
 var app = builder.Build();
 
