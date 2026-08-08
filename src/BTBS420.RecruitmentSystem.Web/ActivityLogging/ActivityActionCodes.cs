@@ -17,6 +17,7 @@ public static class ActivityActionCodes
     public const string EntityArchived = "entity.archived";
     public const string EntityDeleted = "entity.deleted";
     public const string EntityDownloaded = "entity.downloaded";
+    public const string UserPasswordResetByAdmin = "user.password-reset-by-admin";
 
     private static readonly FrozenSet<string> DefinedCodes =
         new[]
@@ -33,7 +34,8 @@ public static class ActivityActionCodes
             EntityStatusChanged,
             EntityArchived,
             EntityDeleted,
-            EntityDownloaded
+            EntityDownloaded,
+            UserPasswordResetByAdmin
         }.ToFrozenSet(StringComparer.Ordinal);
 
     public static IReadOnlySet<string> All => DefinedCodes;
@@ -60,6 +62,7 @@ public static class ActivityActionCodes
             EntityArchived => "Arşivlendi",
             EntityDeleted => "Silindi",
             EntityDownloaded => "İndirildi",
+            UserPasswordResetByAdmin => "Şifre Sıfırlandı (Admin)",
             _ => actionCode
         };
     }

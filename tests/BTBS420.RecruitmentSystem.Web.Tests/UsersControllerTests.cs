@@ -53,6 +53,7 @@ public sealed class UsersControllerTests : IClassFixture<TestWebApplicationFacto
     [InlineData("/Users/Edit/kan37-test-user")]
     [InlineData("/Users/Deactivate/kan37-test-user")]
     [InlineData("/Users/Activate/kan37-test-user")]
+    [InlineData("/Users/ResetPassword/kan37-test-user")]
     public async Task MutasyonUclari_AntiforgeryTokenOlmadanReddeder(string path)
     {
         using var client = CreateClient();
@@ -74,7 +75,7 @@ public sealed class UsersControllerTests : IClassFixture<TestWebApplicationFacto
         Assert.NotNull(authorizeAttribute);
         Assert.Equal(AuthorizationPolicies.AdminOnly, authorizeAttribute.Policy);
 
-        foreach (var actionName in new[] { "Create", "Edit", "Deactivate", "Activate" })
+        foreach (var actionName in new[] { "Create", "Edit", "Deactivate", "Activate", "ResetPassword" })
         {
             var postMethod = controllerType
                 .GetMethods()

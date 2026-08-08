@@ -251,6 +251,109 @@ public sealed class UserManagementSqlServerIntegrationTests :
     }
 
     [SqlServerIntegrationFact]
+    public async Task ResetPassword_YeniSifreCalisirEskisiCalismaz()
+    {
+        using var factory = CreateSqlFactory();
+        await EnsureRolesSeededAsync(factory);
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(
+            factory, $"Kan98-Reset-Departman-{runId}");
+        var userName = $"kan98-reset-{runId}";
+        var userId = await CreateInternalUserAsync(
+            factory, userName, $"{userName}@example.test", SystemRoles.HiringManager,
+            departmentId);
+
+        using var client = CreateClient(factory);
+        var response = await PostResetPasswordAsync(client, userId);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        var detailsResponse = await client.GetAsync(response.Headers.Location!.OriginalString);
+        var detailsBody = await detailsResponse.Content.ReadAsStringAsync();
+        var tokenMatch = Regex.Match(detailsBody, "<code>([^<]+)</code>");
+        Assert.True(tokenMatch.Success, "Geçici şifre gösterimi bulunamadı.");
+        var temporaryPassword = tokenMatch.Groups[1].Value;
+
+        using var anonymousClient = _baseFactory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:DefaultConnection"] = Environment
+                            .GetEnvironmentVariable(ConnectionStringEnvironmentVariable)
+                    });
+            });
+        }).CreateClient(
+            new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = new Uri("https://localhost"),
+                HandleCookies = true
+            });
+
+        var oldPasswordResponse = await PostLoginAsync(anonymousClient, userName, TestPassword);
+        Assert.Equal(HttpStatusCode.OK, oldPasswordResponse.StatusCode);
+        var oldPasswordBody = await oldPasswordResponse.Content.ReadAsStringAsync();
+        Assert.Contains("parola hatal", oldPasswordBody);
+
+        var newPasswordResponse = await PostLoginAsync(
+            anonymousClient, userName, temporaryPassword);
+        Assert.Equal(HttpStatusCode.Redirect, newPasswordResponse.StatusCode);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task ResetPassword_ActivityLogHicbirSutundaSifreyiIcermez()
+    {
+        using var factory = CreateSqlFactory();
+        await EnsureRolesSeededAsync(factory);
+        var runId = Guid.NewGuid().ToString("N");
+        var departmentId = await CreateDepartmentAsync(
+            factory, $"Kan98-Audit-Departman-{runId}");
+        var userName = $"kan98-audit-{runId}";
+        var userId = await CreateInternalUserAsync(
+            factory, userName, $"{userName}@example.test", SystemRoles.Admin, departmentId);
+
+        using var client = CreateClient(factory);
+        var response = await PostResetPasswordAsync(client, userId);
+        var detailsResponse = await client.GetAsync(response.Headers.Location!.OriginalString);
+        var detailsBody = await detailsResponse.Content.ReadAsStringAsync();
+
+        var tokenMatch = Regex.Match(detailsBody, "<code>([^<]+)</code>");
+        Assert.True(tokenMatch.Success, "Geçici şifre gösterimi bulunamadı.");
+        var temporaryPassword = tokenMatch.Groups[1].Value;
+
+        await using var context = CreateRawContext();
+        var log = await context.ActivityLogs
+            .Where(
+                l =>
+                    l.ActionCode == ActivityActionCodes.UserPasswordResetByAdmin &&
+                    l.TargetEntityType == ActivityEntityTypes.User &&
+                    l.TargetEntityId == userId)
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(log);
+        Assert.DoesNotContain(temporaryPassword, log.ActorUserId ?? string.Empty);
+        Assert.DoesNotContain(temporaryPassword, log.ActionCode);
+        Assert.DoesNotContain(temporaryPassword, log.TargetEntityType ?? string.Empty);
+        Assert.DoesNotContain(temporaryPassword, log.TargetEntityId ?? string.Empty);
+        Assert.DoesNotContain(temporaryPassword, log.JobPostingId ?? string.Empty);
+        Assert.DoesNotContain(temporaryPassword, log.CandidateId ?? string.Empty);
+        Assert.DoesNotContain(temporaryPassword, log.Summary);
+    }
+
+    [SqlServerIntegrationFact]
+    public async Task ResetPassword_OlmayanKullanici_NotFoundDoner()
+    {
+        using var factory = CreateSqlFactory();
+        using var client = CreateClient(factory);
+
+        var response = await PostResetPasswordAsync(client, "kan98-olmayan-kullanici");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [SqlServerIntegrationFact]
     public async Task Edit_OlmayanKullanici_NotFoundDoner()
     {
         using var factory = CreateSqlFactory();
@@ -440,6 +543,40 @@ public sealed class UserManagementSqlServerIntegrationTests :
                 ["Email"] = email,
                 ["Role"] = role,
                 ["DepartmentId"] = departmentId.ToString()
+            });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> PostResetPasswordAsync(
+        HttpClient client,
+        string id)
+    {
+        var token = await GetAntiforgeryTokenAsync(client, "/Users/Create");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/Users/ResetPassword/{id}");
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = token
+            });
+
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> PostLoginAsync(
+        HttpClient client,
+        string userNameOrEmail,
+        string password)
+    {
+        var token = await GetAntiforgeryTokenAsync(client, "/Account/Login");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/Account/Login");
+        request.Content = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = token,
+                ["UsernameOrEmail"] = userNameOrEmail,
+                ["Password"] = password
             });
 
         return await client.SendAsync(request);

@@ -483,6 +483,45 @@ public sealed class UsersController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(string id, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.FindAsync([id], cancellationToken);
+
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+        if (!roles.Any(InternalRoles.Contains))
+        {
+            return NotFound();
+        }
+
+        var temporaryPassword = GenerateTemporaryPassword();
+        var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+        var resetResult = await userManager.ResetPasswordAsync(user, resetToken, temporaryPassword);
+
+        if (!resetResult.Succeeded)
+        {
+            TempData[UserActionErrorTempDataKey] = OperationFailedMessage;
+            return RedirectToAction(nameof(Details), new { id = user.Id });
+        }
+
+        activityLogService.Stage(
+            new ActivityLogEntry(
+                ActivityActionCodes.UserPasswordResetByAdmin,
+                "Kullanıcı şifresi admin tarafından sıfırlandı.",
+                ActivityEntityTypes.User,
+                user.Id));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        TempData[GeneratedTemporaryPasswordTempDataKey] = temporaryPassword;
+        return RedirectToAction(nameof(Details), new { id = user.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Activate(string id, CancellationToken cancellationToken)
     {
         var user = await dbContext.Users.FindAsync([id], cancellationToken);
@@ -551,7 +590,8 @@ public sealed class UsersController(
                     log.TargetEntityId == userId &&
                     (log.ActionCode == ActivityActionCodes.EntityCreated ||
                         log.ActionCode == ActivityActionCodes.EntityUpdated ||
-                        log.ActionCode == ActivityActionCodes.EntityStatusChanged))
+                        log.ActionCode == ActivityActionCodes.EntityStatusChanged ||
+                        log.ActionCode == ActivityActionCodes.UserPasswordResetByAdmin))
             .OrderByDescending(log => log.OccurredAtUtc)
             .Select(
                 log => new
