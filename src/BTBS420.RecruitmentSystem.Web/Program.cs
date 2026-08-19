@@ -65,6 +65,7 @@ builder.Services.Configure<IdentityBootstrapOptions>(
     builder.Configuration.GetSection(IdentityBootstrapOptions.SectionName));
 builder.Services.AddScoped<IdentityRoleSeeder>();
 builder.Services.AddScoped<InitialAdminSeeder>();
+builder.Services.AddScoped<SampleRecruiterSeeder>();
 builder.Services.AddScoped<LookupDataSeeder>();
 builder.Services.AddScoped<IIdentityDataSeeder, IdentityDataSeeder>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
