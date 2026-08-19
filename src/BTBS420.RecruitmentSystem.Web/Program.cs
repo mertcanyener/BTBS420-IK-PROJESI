@@ -66,7 +66,9 @@ builder.Services.Configure<IdentityBootstrapOptions>(
 builder.Services.AddScoped<IdentityRoleSeeder>();
 builder.Services.AddScoped<InitialAdminSeeder>();
 builder.Services.AddScoped<SampleRecruiterSeeder>();
+builder.Services.AddScoped<SampleHiringManagerSeeder>();
 builder.Services.AddScoped<LookupDataSeeder>();
+builder.Services.AddScoped<SampleCandidateSeeder>();
 builder.Services.AddScoped<IIdentityDataSeeder, IdentityDataSeeder>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<IActivityLogRedactor, ActivityLogRedactor>();
