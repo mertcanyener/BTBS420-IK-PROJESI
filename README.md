@@ -30,12 +30,14 @@ manuel kabul testi senaryoları için [`docs/UAT_GUIDE.md`](docs/UAT_GUIDE.md) d
 
 2. **SQL Server sağla**
 
-   Yerelde Docker ile geçici bir SQL Server container'ı çalıştırılabilir:
+   Repo kökündeki `docker-compose.yml`, sabit port (1433) ve sabit container adıyla
+   (`btbs420-dev-sql`) standart bir SQL Server container'ı tanımlar. sa şifresi `.env`
+   dosyasından okunur:
 
    ```
-   docker run -d --name btbs420-dev-sql -p 1433:1433 \
-     -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="<güçlü-bir-şifre>" \
-     mcr.microsoft.com/mssql/server:2022-latest
+   cp .env.example .env
+   # .env içindeki MSSQL_SA_PASSWORD değerini güçlü bir şifreyle doldurun
+   docker compose up -d
    ```
 
    Gerçek bir kurumsal SQL Server instance'ı da kullanılabilir.
@@ -44,19 +46,20 @@ manuel kabul testi senaryoları için [`docs/UAT_GUIDE.md`](docs/UAT_GUIDE.md) d
 
    Uygulama, connection string'i `ConnectionStrings:DefaultConnection`'dan okur ve boşsa
    başlangıçta hata fırlatır. **Gerçek connection string'i asla `appsettings.json`'a veya
-   commit'e yazmayın.** Geliştirme ortamında ya .NET user-secrets ya da ortam değişkeni kullanın:
+   commit'e yazmayın.** Geliştirme ortamında ya .NET user-secrets ya da ortam değişkeni kullanın;
+   şifre olarak `.env` dosyasına yazdığınız `MSSQL_SA_PASSWORD` değerini kullanın:
 
    ```
    dotnet user-secrets init --project src/BTBS420.RecruitmentSystem.Web
    dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
-     "Server=localhost,1433;Database=BTBS420_Dev;User Id=sa;Password=<şifre>;TrustServerCertificate=True;" \
+     "Server=localhost,1433;Database=BTBS420_Dev;User Id=sa;Password=<.env'deki-şifre>;TrustServerCertificate=True;" \
      --project src/BTBS420.RecruitmentSystem.Web
    ```
 
    veya
 
    ```
-   export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=BTBS420_Dev;User Id=sa;Password=<şifre>;TrustServerCertificate=True;"
+   export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=BTBS420_Dev;User Id=sa;Password=<.env'deki-şifre>;TrustServerCertificate=True;"
    ```
 
 4. **Migration'ları uygula**
