@@ -49,8 +49,8 @@ jobs:
       - name: Build
         run: dotnet build BTBS420.RecruitmentSystem.sln --configuration Release --no-restore
 
-      - name: Install dotnet-ef
-        run: dotnet tool install --global dotnet-ef
+      - name: Restore local tools (dotnet-ef)
+        run: dotnet tool restore
 
       - name: Apply test database migrations
         env:
