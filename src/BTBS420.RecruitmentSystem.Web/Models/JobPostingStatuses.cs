@@ -1,0 +1,48 @@
+using System.Collections.Frozen;
+
+namespace BTBS420.RecruitmentSystem.Web.Models;
+
+public static class JobPostingStatuses
+{
+    public const string Draft = "draft";
+    public const string Published = "published";
+    public const string ApplicationsClosed = "applications-closed";
+    public const string PositionFilled = "position-filled";
+    public const string Archived = "archived";
+
+    private static readonly FrozenSet<string> DefinedStatuses =
+        new[] { Draft, Published, ApplicationsClosed, PositionFilled, Archived }
+            .ToFrozenSet(StringComparer.Ordinal);
+
+    private static readonly FrozenDictionary<string, FrozenSet<string>> AllowedTransitions =
+        new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
+        {
+            [Draft] = new[] { Published }.ToFrozenSet(StringComparer.Ordinal),
+            [Published] = new[] { ApplicationsClosed, PositionFilled, Archived }
+                .ToFrozenSet(StringComparer.Ordinal),
+            [ApplicationsClosed] = new[] { Published, PositionFilled, Archived }
+                .ToFrozenSet(StringComparer.Ordinal),
+            [PositionFilled] = new[] { Archived }.ToFrozenSet(StringComparer.Ordinal),
+            [Archived] = FrozenSet<string>.Empty
+        }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    public static IReadOnlySet<string> All => DefinedStatuses;
+
+    public static bool IsDefined(string status)
+    {
+        return DefinedStatuses.Contains(status);
+    }
+
+    public static bool IsValidTransition(string currentStatus, string newStatus)
+    {
+        return AllowedTransitions.TryGetValue(currentStatus, out var allowedNextStatuses) &&
+            allowedNextStatuses.Contains(newStatus);
+    }
+
+    public static IReadOnlySet<string> GetAllowedNextStatuses(string currentStatus)
+    {
+        return AllowedTransitions.TryGetValue(currentStatus, out var allowedNextStatuses)
+            ? allowedNextStatuses
+            : FrozenSet<string>.Empty;
+    }
+}

@@ -1,0 +1,41 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.ExperienceRanges.ExperienceRangeFormViewModel
+
+@{
+    ViewData["Title"] = "Deneyim Aralığını Düzenle";
+}
+
+<h1 class="h3 mb-4">Deneyim Aralığını Düzenle</h1>
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-controller="ExperienceRanges" asp-action="Edit" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" novalidate>
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="MinYears" class="form-label"></label>
+                <input asp-for="MinYears" class="form-control" type="number" />
+                <span asp-validation-for="MinYears" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="MaxYears" class="form-label"></label>
+                <input asp-for="MaxYears" class="form-control" type="number" />
+                <span asp-validation-for="MaxYears" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a class="btn btn-outline-secondary" asp-controller="ExperienceRanges" asp-action="Index">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

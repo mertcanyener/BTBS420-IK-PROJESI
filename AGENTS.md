@@ -47,6 +47,10 @@ KAN-5: Departman yönetimi eklendi
 Bu değişiklik, sistem yöneticisinin departmanları güvenli şekilde
 yönetebilmesi için yapıldı.
 
+## Test Veritabanı Kuralı
+
+- SQL-gated entegrasyon testleri (`*_TEST_SQLSERVER_CONNECTION_STRING`) BTBS420_Dev'e ASLA karışmamalı, hep BTBS420_Test kullanılmalı.
+
 ## Hata Kuralları
 
 - Build başarısızsa taskı Done yapma.

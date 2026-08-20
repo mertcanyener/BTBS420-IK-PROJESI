@@ -1,0 +1,44 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateDocuments.StaffCandidateDocumentIndexViewModel
+
+@{
+    ViewData["Title"] = $"{Model.CandidateFullName} - Belgeler";
+}
+
+<h1 class="h2 mb-4">@Model.CandidateFullName — Belgeler</h1>
+
+@if (Model.Documents.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Bu aday için henüz belge yüklenmedi.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Belge Türü</th>
+                <th scope="col">Dosya Adı</th>
+                <th scope="col">Boyut</th>
+                <th scope="col">Yükleme Tarihi</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var document in Model.Documents)
+            {
+                <tr>
+                    <td>@document.DocumentTypeLabel</td>
+                    <td>@document.OriginalFileName</td>
+                    <td>@((document.FileSizeBytes / 1024.0).ToString("N0")) KB</td>
+                    <td>@document.UploadedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="StaffCandidateDocuments" asp-action="Download" asp-route-id="@document.Id">İndir</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

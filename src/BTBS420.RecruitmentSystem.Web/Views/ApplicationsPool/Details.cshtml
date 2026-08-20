@@ -1,0 +1,356 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.ApplicationsPool.ApplicationPoolDetailViewModel
+
+@{
+    ViewData["Title"] = $"{Model.CandidateFullName} — Başvuru Detayı";
+}
+
+<h1 class="h2 mb-4">@Model.CandidateFullName — Başvuru Detayı</h1>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-info" role="status">@statusMessage</div>
+}
+
+<div class="row g-4">
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Aday Profili</h2>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Ad Soyad</dt>
+                    <dd class="col-sm-8">@Model.CandidateFullName</dd>
+
+                    <dt class="col-sm-4">Hedef Pozisyon</dt>
+                    <dd class="col-sm-8">@(Model.TargetPositionName ?? "-")</dd>
+
+                    <dt class="col-sm-4">Mesleki Özet</dt>
+                    <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(Model.ProfessionalSummary) ? "-" : Model.ProfessionalSummary)</dd>
+
+                    <dt class="col-sm-4">Yetkinlikler</dt>
+                    <dd class="col-sm-8">@(Model.Skills.Count == 0 ? "-" : string.Join(", ", Model.Skills))</dd>
+
+                    <dt class="col-sm-4">Diller</dt>
+                    <dd class="col-sm-8">@(Model.Languages.Count == 0 ? "-" : string.Join(", ", Model.Languages))</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Eğitim</h2>
+                @if (Model.Educations.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Kayıt yok.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var education in Model.Educations)
+                        {
+                            <li class="mb-2">
+                                <strong>@education.EducationLevelName</strong> — @education.SchoolName
+                                @(string.IsNullOrWhiteSpace(education.FieldOfStudy) ? "" : $"({education.FieldOfStudy})")
+                                <br />
+                                <span class="text-body-secondary">
+                                    @education.StartDate.ToString("dd.MM.yyyy") -
+                                    @(education.EndDate.HasValue ? education.EndDate.Value.ToString("dd.MM.yyyy") : "Devam ediyor")
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">İş Deneyimi</h2>
+                @if (Model.Experiences.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Kayıt yok.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var experience in Model.Experiences)
+                        {
+                            <li class="mb-2">
+                                <strong>@experience.JobTitle</strong> — @experience.CompanyName
+                                <br />
+                                <span class="text-body-secondary">
+                                    @experience.StartDate.ToString("dd.MM.yyyy") -
+                                    @(experience.EndDate.HasValue ? experience.EndDate.Value.ToString("dd.MM.yyyy") : "Devam ediyor")
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Belgeler</h2>
+                @if (Model.Documents.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Belge yok.</p>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Tür</th>
+                                <th scope="col">Dosya Adı</th>
+                                <th scope="col">Boyut</th>
+                                <th scope="col">Yükleme Tarihi</th>
+                                <th scope="col" class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var document in Model.Documents)
+                            {
+                                <tr>
+                                    <td>@document.DocumentTypeLabel</td>
+                                    <td>@document.OriginalFileName</td>
+                                    <td>@((document.FileSizeBytes / 1024.0).ToString("N0")) KB</td>
+                                    <td>@document.UploadedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-primary" asp-controller="ApplicationsPool" asp-action="DownloadDocument" asp-route-id="@Model.Id" asp-route-documentId="@document.Id">İndir</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Başvuru</h2>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">İlan</dt>
+                    <dd class="col-sm-8">@Model.JobPostingTitle</dd>
+
+                    <dt class="col-sm-4">Pozisyon</dt>
+                    <dd class="col-sm-8">@Model.PositionName</dd>
+
+                    <dt class="col-sm-4">Departman</dt>
+                    <dd class="col-sm-8">@Model.DepartmentName</dd>
+
+                    <dt class="col-sm-4">İlan Durumu</dt>
+                    <dd class="col-sm-8">
+                        <span class="status-pill @(Model.JobPostingStatus switch
+                        {
+                            "draft" => "status-new",
+                            "published" => "status-interview",
+                            "applications-closed" => "status-offer",
+                            "position-filled" => "status-hired",
+                            "archived" => "status-neutral",
+                            _ => "status-neutral"
+                        })">@Model.JobPostingStatus</span>
+                    </dd>
+
+                    <dt class="col-sm-4">Son Başvuru Tarihi</dt>
+                    <dd class="col-sm-8">@Model.ApplicationDeadline.ToString("dd.MM.yyyy")</dd>
+
+                    <dt class="col-sm-4">Başvuru Durumu</dt>
+                    <dd class="col-sm-8">
+                        <span class="status-pill @(Model.ApplicationStatusLabel switch
+                        {
+                            "Yeni" => "status-new",
+                            "Ön Eleme" => "status-screening",
+                            "Mülakat" => "status-interview",
+                            "Geri Çekildi" => "status-neutral",
+                            "Reddedildi" => "status-rejected",
+                            "İşe Alındı" => "status-hired",
+                            _ => "status-neutral"
+                        })">@Model.ApplicationStatusLabel</span>
+                    </dd>
+
+                    <dt class="col-sm-4">Başvuru Tarihi</dt>
+                    <dd class="col-sm-8">@Model.AppliedAtUtc.ToString("dd.MM.yyyy HH:mm")</dd>
+
+                    @if (Model.WithdrawnAtUtc.HasValue)
+                    {
+                        <dt class="col-sm-4">Geri Çekilme Tarihi</dt>
+                        <dd class="col-sm-8">@Model.WithdrawnAtUtc.Value.ToString("dd.MM.yyyy HH:mm")</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h2 class="h5 mb-0">Mülakatlar</h2>
+                    @if (Model.CanScheduleInterview)
+                    {
+                        <a class="btn btn-sm btn-primary" asp-controller="ApplicationsPool" asp-action="CreateInterview" asp-route-id="@Model.Id">Mülakat Planla</a>
+                    }
+                </div>
+                @if (Model.Interviews.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Henüz mülakat planlanmadı.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var interview in Model.Interviews)
+                        {
+                            <li class="border-top pt-2 mb-2">
+                                <div>
+                                    <span class="badge text-bg-secondary">@interview.InterviewTypeLabel</span>
+                                    <span class="badge text-bg-info">@interview.StatusLabel</span>
+                                </div>
+                                <div>
+                                    @interview.StartAtUtc.ToString("dd.MM.yyyy HH:mm") -
+                                    @interview.EndAtUtc.ToString("dd.MM.yyyy HH:mm")
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(interview.OnlineMeetingLink))
+                                {
+                                    <div>Link: <a href="@interview.OnlineMeetingLink" target="_blank" rel="noopener">@interview.OnlineMeetingLink</a></div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(interview.Location))
+                                {
+                                    <div>Konum: @interview.Location</div>
+                                }
+                                <div>
+                                    Katılımcılar:
+                                    @(interview.ParticipantNames.Count == 0 ? "-" : string.Join(", ", interview.ParticipantNames))
+                                </div>
+                                @if (Model.CanScheduleInterview)
+                                {
+                                    <form asp-controller="ApplicationsPool" asp-action="AssignParticipants" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mt-2">
+                                        <input type="hidden" name="interviewId" value="@interview.Id" />
+                                        <div class="input-group input-group-sm">
+                                            <select name="participantUserIds" class="form-select" multiple size="3">
+                                                @foreach (var option in Model.ParticipantOptions)
+                                                {
+                                                    <option value="@option.Id">@option.Name</option>
+                                                }
+                                            </select>
+                                            <button type="submit" class="btn btn-outline-primary">Katılımcı Ata</button>
+                                        </div>
+                                    </form>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        @if (Model.CanMoveToScreening || Model.CanMoveToInterview || Model.CanReject || Model.CanReevaluate || Model.CanArchive || Model.CanCreateOffer || Model.OfferId.HasValue)
+        {
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 mb-3">İşlemler</h2>
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (Model.CanMoveToScreening)
+                        {
+                            <form asp-controller="ApplicationsPool" asp-action="MoveToScreening" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+                                <button type="submit" class="btn btn-outline-primary">Ön Elemeye Al</button>
+                            </form>
+                        }
+                        @if (Model.CanMoveToInterview)
+                        {
+                            <form asp-controller="ApplicationsPool" asp-action="MoveToInterview" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+                                <button type="submit" class="btn btn-outline-primary">Mülakata Al</button>
+                            </form>
+                        }
+                        @if (Model.CanCreateOffer)
+                        {
+                            <a class="btn btn-sm btn-primary" asp-controller="Offers" asp-action="Create" asp-route-applicationId="@Model.Id">Teklif Oluştur</a>
+                        }
+                        else if (Model.OfferId.HasValue)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-controller="Offers" asp-action="Edit" asp-route-id="@Model.OfferId">Teklifi Görüntüle (@Model.OfferStatusLabel)</a>
+                        }
+                        @if (Model.CanArchive)
+                        {
+                            <form asp-controller="ApplicationsPool" asp-action="Archive" asp-route-id="@Model.Id" method="post" asp-antiforgery="true">
+                                <button type="submit" class="btn btn-outline-secondary">Arşivle</button>
+                            </form>
+                        }
+                    </div>
+                    @if (Model.CanReject)
+                    {
+                        <form asp-controller="ApplicationsPool" asp-action="Reject" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mt-3">
+                            <div class="mb-2">
+                                <label class="form-label">Ret Gerekçesi</label>
+                                <textarea class="form-control" name="reason" rows="2" placeholder="Gerekçe (opsiyonel)..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-outline-danger">Başvuruyu Reddet</button>
+                        </form>
+                    }
+                    @if (Model.CanReevaluate)
+                    {
+                        <form asp-controller="ApplicationsPool" asp-action="Reevaluate" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mt-3">
+                            <div class="mb-2">
+                                <label class="form-label">Yeniden Değerlendirme Gerekçesi</label>
+                                <textarea class="form-control" name="reason" rows="2" placeholder="Gerekçe belirtin..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-outline-primary">Yeniden Değerlendirmeye Al</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Notlar</h2>
+                <form asp-controller="ApplicationsPool" asp-action="AddNote" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" class="mb-3">
+                    <div class="mb-2">
+                        <textarea class="form-control" name="body" rows="3" placeholder="Not ekleyin..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary">Not Ekle</button>
+                </form>
+                @if (Model.Notes.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Henüz not eklenmedi.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var note in Model.Notes)
+                        {
+                            <li class="border-top pt-2 mb-2">
+                                <div class="text-body-secondary small">@note.AuthorName — @note.CreatedAtUtc.ToString("dd.MM.yyyy HH:mm")</div>
+                                <div>@note.Body</div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Zaman Çizelgesi</h2>
+                @if (Model.Timeline.Count == 0)
+                {
+                    <p class="text-body-secondary mb-0">Kayıt yok.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var entry in Model.Timeline)
+                        {
+                            <li class="border-top pt-2 mb-2">
+                                <div class="text-body-secondary small">@entry.OccurredAtUtc.ToString("dd.MM.yyyy HH:mm") — @entry.ActorName</div>
+                                <div>@entry.Description</div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<a class="btn btn-outline-secondary" asp-controller="ApplicationsPool" asp-action="Index">Listeye Dön</a>

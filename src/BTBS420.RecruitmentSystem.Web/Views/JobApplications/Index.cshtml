@@ -1,0 +1,86 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.JobApplications.JobApplicationIndexViewModel
+
+@{
+    ViewData["Title"] = "Başvurularım";
+}
+
+<h1 class="h2 mb-4">Başvurularım</h1>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-info" role="status">@statusMessage</div>
+}
+
+@if (Model.Applications.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Henüz bir ilana başvurmadınız.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">İlan</th>
+                <th scope="col">Pozisyon</th>
+                <th scope="col">İlan Durumu</th>
+                <th scope="col">Başvuru Durumu</th>
+                <th scope="col">Başvuru Tarihi</th>
+                <th scope="col">Geri Çekilme Tarihi</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var application in Model.Applications)
+            {
+                <tr>
+                    <td>@application.JobPostingTitle</td>
+                    <td>@application.PositionName</td>
+                    <td>@application.JobPostingStatus</td>
+                    <td>@application.ApplicationStatusLabel</td>
+                    <td>@application.AppliedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@(application.WithdrawnAtUtc.HasValue ? application.WithdrawnAtUtc.Value.ToString("dd.MM.yyyy HH:mm") : "-")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="PublicJobPostings" asp-action="Details" asp-route-id="@application.JobPostingId">İlanı Görüntüle</a>
+                        @if (application.CanWithdraw)
+                        {
+                            <form asp-controller="JobApplications" asp-action="Withdraw" asp-route-id="@application.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Geri Çek</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+                @if (application.OfferId.HasValue)
+                {
+                    <tr>
+                        <td colspan="7">
+                            <div class="alert alert-light border mb-0">
+                                <strong>Teklif (@application.OfferStatusLabel):</strong>
+                                @application.OfferSalary?.ToString("N2") TL,
+                                başlangıç @application.OfferStartDate?.ToString("dd.MM.yyyy")
+                                @if (!string.IsNullOrWhiteSpace(application.OfferNote))
+                                {
+                                    <span> — @application.OfferNote</span>
+                                }
+                                @if (application.CanDecideOffer)
+                                {
+                                    <div class="mt-2">
+                                        <form asp-controller="JobApplications" asp-action="AcceptOffer" asp-route-id="@application.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-success">Kabul Et</button>
+                                        </form>
+                                        <form asp-controller="JobApplications" asp-action="RejectOffer" asp-route-id="@application.Id" method="post" asp-antiforgery="true" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Reddet</button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}

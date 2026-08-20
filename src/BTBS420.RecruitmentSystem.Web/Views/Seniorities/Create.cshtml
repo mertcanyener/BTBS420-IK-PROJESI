@@ -1,0 +1,34 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Seniorities.SeniorityFormViewModel
+
+@{
+    ViewData["Title"] = "Yeni Kıdem";
+}
+
+<h1 class="h3 mb-4">Yeni Kıdem</h1>
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-controller="Seniorities" asp-action="Create" method="post" asp-antiforgery="true" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Rank" class="form-label"></label>
+                <input asp-for="Rank" class="form-control" type="number" />
+                <span asp-validation-for="Rank" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Oluştur</button>
+            <a class="btn btn-outline-secondary" asp-controller="Seniorities" asp-action="Index">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

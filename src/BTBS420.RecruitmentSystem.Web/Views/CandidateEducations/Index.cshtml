@@ -1,0 +1,58 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateEducations.CandidateEducationIndexViewModel
+
+@{
+    ViewData["Title"] = "Eğitim Bilgilerim";
+}
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <h1 class="h2 mb-0">Eğitim Bilgilerim</h1>
+    <a class="btn btn-primary" asp-controller="CandidateEducations" asp-action="Create">Yeni Eğitim Ekle</a>
+</div>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="status">@statusMessage</div>
+}
+
+@if (Model.Educations.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Henüz eğitim bilgisi eklenmedi.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Eğitim Seviyesi</th>
+                <th scope="col">Okul</th>
+                <th scope="col">Bölüm</th>
+                <th scope="col">Tarih Aralığı</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var education in Model.Educations)
+            {
+                <tr>
+                    <td>@education.EducationName</td>
+                    <td>@education.SchoolName</td>
+                    <td>@(education.FieldOfStudy ?? "-")</td>
+                    <td>
+                        @education.StartDate.ToString("dd.MM.yyyy") -
+                        @(education.EndDate.HasValue ? education.EndDate.Value.ToString("dd.MM.yyyy") : "Devam ediyor")
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="CandidateEducations" asp-action="Edit" asp-route-id="@education.Id">Düzenle</a>
+                        <form asp-controller="CandidateEducations" asp-action="Delete" asp-route-id="@education.Id" method="post" asp-antiforgery="true" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

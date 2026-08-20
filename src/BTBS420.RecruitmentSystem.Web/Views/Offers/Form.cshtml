@@ -1,0 +1,103 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Offers.OfferFormViewModel
+
+@{
+    var isEdit = Model.OfferId.HasValue;
+    ViewData["Title"] = isEdit ? "Teklifi Düzenle" : "Teklif Oluştur";
+    var formAction = isEdit
+        ? Url.Action("Edit", "Offers", new { id = Model.OfferId })
+        : Url.Action("Create", "Offers", new { applicationId = Model.JobApplicationId });
+}
+
+<h1 class="h3 mb-4">@ViewData["Title"]</h1>
+
+<a class="btn btn-outline-secondary mb-3" asp-controller="ApplicationsPool" asp-action="Details" asp-route-id="@Model.JobApplicationId">Başvuruya Dön</a>
+
+<dl class="row">
+    <dt class="col-sm-3">Aday</dt>
+    <dd class="col-sm-9">@Model.CandidateName</dd>
+    <dt class="col-sm-3">İlan</dt>
+    <dd class="col-sm-9">@Model.JobPostingTitle</dd>
+    @if (isEdit)
+    {
+        <dt class="col-sm-3">Durum</dt>
+        <dd class="col-sm-9">
+            <span class="status-pill @(Model.StatusLabel switch
+            {
+                "Taslak" => "status-new",
+                "Yönetici Onayı Bekliyor" => "status-offer",
+                "Onaylandı" => "status-hired",
+                "Yönetici Tarafından Reddedildi" => "status-rejected",
+                "Kabul Edildi" => "status-hired",
+                "Aday Tarafından Reddedildi" => "status-rejected",
+                _ => "status-neutral"
+            })">@Model.StatusLabel</span>
+        </dd>
+    }
+</dl>
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <form method="post" action="@formAction" novalidate>
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <input type="hidden" asp-for="OfferId" />
+            <input type="hidden" asp-for="JobApplicationId" />
+            <input type="hidden" asp-for="RowVersion" />
+
+            <div class="mb-3">
+                <label asp-for="Salary" class="form-label"></label>
+                <input asp-for="Salary" class="form-control" readonly="@(!Model.CanEdit)" />
+                <span asp-validation-for="Salary" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="StartDate" class="form-label"></label>
+                <input asp-for="StartDate" class="form-control" type="date" readonly="@(!Model.CanEdit)" />
+                <span asp-validation-for="StartDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Note" class="form-label"></label>
+                <textarea asp-for="Note" class="form-control" readonly="@(!Model.CanEdit)"></textarea>
+                <span asp-validation-for="Note" class="text-danger"></span>
+            </div>
+
+            @if (Model.CanEdit)
+            {
+                <button type="submit" class="btn btn-primary">Kaydet</button>
+            }
+        </form>
+
+        @if (Model.CanSubmit)
+        {
+            <form method="post" action="@Url.Action("Submit", "Offers", new { id = Model.OfferId })" class="mt-3" novalidate>
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-outline-primary">Yönetici Onayına Gönder</button>
+            </form>
+        }
+
+        @if (Model.CanDecide)
+        {
+            <div class="mt-4 border-top pt-3">
+                <h2 class="h5">Yönetici Kararı</h2>
+                <form method="post" action="@Url.Action("Approve", "Offers", new { id = Model.OfferId })" class="d-inline" novalidate>
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-success">Onayla</button>
+                </form>
+
+                <form method="post" action="@Url.Action("Reject", "Offers", new { id = Model.OfferId })" class="mt-2" novalidate>
+                    @Html.AntiForgeryToken()
+                    <div class="mb-2">
+                        <label for="reason" class="form-label">Red Gerekçesi</label>
+                        <textarea name="reason" id="reason" class="form-control"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-danger">Reddet</button>
+                </form>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

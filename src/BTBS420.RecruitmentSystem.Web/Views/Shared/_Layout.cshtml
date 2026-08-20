@@ -1,0 +1,152 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="BTBS420 İşe Alım ve Aday Takip Sistemi" />
+    <title>@ViewData["Title"] - İşe Alım Sistemi</title>
+    <script type="importmap"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/BTBS420.RecruitmentSystem.Web.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <a class="visually-hidden-focusable skip-link" href="#main-content">Ana içeriğe geç</a>
+    <header class="shadow-sm">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary" aria-label="Ana navigasyon">
+            <div class="container">
+                <a class="navbar-brand fw-semibold" asp-area="" asp-controller="Home" asp-action="Index">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                        <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6" />
+                        <path d="M8 7V5.5C8 4.67 8.67 4 9.5 4h5c.83 0 1.5.67 1.5 1.5V7" stroke="currentColor" stroke-width="1.6" />
+                        <path d="M3 12h18" stroke="currentColor" stroke-width="1.6" />
+                    </svg>
+                    İşe Alım Sistemi
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavigation"
+                        aria-controls="mainNavigation" aria-expanded="false" aria-label="Menüyü aç veya kapat">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNavigation">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" asp-area="" asp-controller="Home" asp-action="Index">Ana Sayfa</a>
+                        </li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            @if (User.IsInRole("İşe Alım Uzmanı"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="SpecialistDashboard" asp-action="Index">Dashboard</a>
+                                </li>
+                            }
+                            @if (User.IsInRole("İşe Alım Yöneticisi"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="ManagerDashboard" asp-action="Index">Dashboard</a>
+                                </li>
+                            }
+                            @if (User.IsInRole("Admin") || User.IsInRole("İşe Alım Uzmanı") || User.IsInRole("İşe Alım Yöneticisi"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="JobPostings" asp-action="Index">İlanlar</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="ApplicationsPool" asp-action="Index">Başvuru Havuzu</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Interviews" asp-action="Index">Mülakatlar</a>
+                                </li>
+                            }
+                            @if (User.IsInRole("Aday"))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="PublicJobPostings" asp-action="Index">İlanlar</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="CandidateProfile" asp-action="Index">Profilim</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="CandidateEducations" asp-action="Index">Eğitim Bilgilerim</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="CandidateExperiences" asp-action="Index">İş Deneyimlerim</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="CandidateDocuments" asp-action="Index">Belgelerim</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="JobApplications" asp-action="Index">Başvurularım</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Interviews" asp-action="Index">Mülakatlarım</a>
+                                </li>
+                            }
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" id="adminMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Yönetim
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminMenuDropdown">
+                                        <li><a class="dropdown-item" asp-controller="AdminDashboard" asp-action="Index">Dashboard</a></li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><a class="dropdown-item" asp-controller="Departments" asp-action="Index">Departmanlar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Positions" asp-action="Index">Pozisyonlar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Users" asp-action="Index">Kullanıcılar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="ActivityLogs" asp-action="Index">Aktivite Kayıtları</a></li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><h6 class="dropdown-header">Filtre Katalogları</h6></li>
+                                        <li><a class="dropdown-item" asp-controller="Skills" asp-action="Index">Yetkinlikler</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Educations" asp-action="Index">Eğitimler</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Languages" asp-action="Index">Diller</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Locations" asp-action="Index">Konumlar</a></li>
+                                        <li><a class="dropdown-item" asp-controller="ExperienceRanges" asp-action="Index">Deneyim Aralıkları</a></li>
+                                        <li><a class="dropdown-item" asp-controller="JobFamilies" asp-action="Index">İş Aileleri</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Seniorities" asp-action="Index">Kıdem Seviyeleri</a></li>
+                                    </ul>
+                                </li>
+                            }
+                            <li class="nav-item">
+                                @await Component.InvokeAsync("NotificationMenu")
+                            </li>
+                            <li class="nav-item">
+                                <form asp-controller="Account" asp-action="Logout" method="post" asp-antiforgery="true">
+                                    <button type="submit" class="btn btn-link nav-link">Çıkış Yap</button>
+                                </form>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Account" asp-action="Login">Giriş Yap</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Account" asp-action="Register">Kayıt Ol</a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container py-4 py-lg-5">
+        <main id="main-content" role="main" class="pb-4">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-body-secondary bg-body-tertiary">
+        <div class="container">
+            &copy; @DateTime.UtcNow.Year — BTBS420 İşe Alım ve Aday Takip Sistemi
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

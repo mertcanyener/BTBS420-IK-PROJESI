@@ -1,0 +1,97 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Users.UserIndexViewModel
+
+@{
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<h1 class="h2 mb-4">Kullanıcılar</h1>
+
+<div class="mb-3">
+    <a class="btn btn-primary" asp-controller="Users" asp-action="Create">Yeni Kullanıcı</a>
+</div>
+
+<form asp-controller="Users" asp-action="Index" method="get" class="row g-2 mb-4">
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="search">Ad / E-posta</label>
+        <input type="text" class="form-control" id="search" name="search" value="@Model.Search" />
+    </div>
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="role">Rol</label>
+        <select class="form-select" id="role" name="role">
+            <option value="">Tümü</option>
+            @foreach (var roleOption in Model.RoleOptions)
+            {
+                <option value="@roleOption" selected="@(Model.Role == roleOption)">@roleOption</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="departmentId">Departman</label>
+        <select class="form-select" id="departmentId" name="departmentId">
+            <option value="">Tümü</option>
+            @foreach (var departmentOption in Model.DepartmentOptions)
+            {
+                <option value="@departmentOption.Id" selected="@(Model.DepartmentId == departmentOption.Id)">@departmentOption.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-2">
+        <label class="form-label" for="isActive">Durum</label>
+        <select class="form-select" id="isActive" name="isActive">
+            <option value="">Tümü</option>
+            <option value="true" selected="@(Model.IsActive == true)">Aktif</option>
+            <option value="false" selected="@(Model.IsActive == false)">Pasif</option>
+        </select>
+    </div>
+    <div class="col-12 col-md-1 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">Filtrele</button>
+    </div>
+</form>
+
+@if (Model.Users.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Filtreye uyan kullanıcı bulunamadı.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Kullanıcı Adı</th>
+                <th scope="col">E-posta</th>
+                <th scope="col">Roller</th>
+                <th scope="col">Departman</th>
+                <th scope="col">Durum</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in Model.Users)
+            {
+                <tr>
+                    <td>@user.UserName</td>
+                    <td>@user.Email</td>
+                    <td>@string.Join(", ", user.Roles)</td>
+                    <td>@(user.DepartmentName ?? "-")</td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <span class="badge text-bg-success">Aktif</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">Pasif</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="Users" asp-action="Details" asp-route-id="@user.Id">Görüntüle</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

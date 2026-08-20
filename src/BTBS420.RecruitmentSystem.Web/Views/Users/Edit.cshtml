@@ -1,0 +1,58 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Users.UserFormViewModel
+
+@{
+    ViewData["Title"] = "Kullanıcıyı Düzenle";
+}
+
+<h1 class="h3 mb-4">Kullanıcıyı Düzenle</h1>
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-controller="Users" asp-action="Edit" asp-route-id="@Model.Id" method="post" asp-antiforgery="true" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="UserName" class="form-label"></label>
+                <input asp-for="UserName" class="form-control" />
+                <span asp-validation-for="UserName" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Role" class="form-label"></label>
+                <select asp-for="Role" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var roleOption in Model.RoleOptions)
+                    {
+                        <option value="@roleOption" selected="@(Model.Role == roleOption)">@roleOption</option>
+                    }
+                </select>
+                <span asp-validation-for="Role" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="DepartmentId" class="form-label"></label>
+                <select asp-for="DepartmentId" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var departmentOption in Model.DepartmentOptions)
+                    {
+                        <option value="@departmentOption.Id" selected="@(Model.DepartmentId == departmentOption.Id)">@departmentOption.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="DepartmentId" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a class="btn btn-outline-secondary" asp-controller="Users" asp-action="Details" asp-route-id="@Model.Id">Vazgeç</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

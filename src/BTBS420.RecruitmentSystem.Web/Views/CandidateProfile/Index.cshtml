@@ -1,0 +1,82 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.CandidateProfiles.CandidateProfileFormViewModel
+
+@{
+    ViewData["Title"] = "Profilim";
+}
+
+<h1 class="h3 mb-4">Profilim</h1>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="status">@statusMessage</div>
+}
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <form asp-controller="CandidateProfile" asp-action="Index" method="post" asp-antiforgery="true" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="mb-3">
+                <label asp-for="FirstName" class="form-label"></label>
+                <input asp-for="FirstName" class="form-control" />
+                <span asp-validation-for="FirstName" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="LastName" class="form-label"></label>
+                <input asp-for="LastName" class="form-control" />
+                <span asp-validation-for="LastName" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ProfessionalSummary" class="form-label"></label>
+                <textarea asp-for="ProfessionalSummary" class="form-control" rows="4"></textarea>
+                <span asp-validation-for="ProfessionalSummary" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="TargetPositionId" class="form-label"></label>
+                <select asp-for="TargetPositionId" class="form-select">
+                    <option value="">Seçiniz</option>
+                    @foreach (var option in Model.PositionOptions)
+                    {
+                        <option value="@option.Id">@option.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="TargetPositionId" class="text-danger"></span>
+            </div>
+
+            <fieldset class="mb-3">
+                <legend class="form-label h6">Yetkinlikler</legend>
+                <span asp-validation-for="SelectedSkillIds" class="text-danger d-block"></span>
+                @foreach (var option in Model.SkillOptions)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="SelectedSkillIds" value="@option.Id"
+                               id="skill-@option.Id" checked="@Model.SelectedSkillIds.Contains(option.Id)" />
+                        <label class="form-check-label" for="skill-@option.Id">@option.Name</label>
+                    </div>
+                }
+            </fieldset>
+
+            <fieldset class="mb-3">
+                <legend class="form-label h6">Diller</legend>
+                <span asp-validation-for="SelectedLanguageIds" class="text-danger d-block"></span>
+                @foreach (var option in Model.LanguageOptions)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="SelectedLanguageIds" value="@option.Id"
+                               id="language-@option.Id" checked="@Model.SelectedLanguageIds.Contains(option.Id)" />
+                        <label class="form-check-label" for="language-@option.Id">@option.Name</label>
+                    </div>
+                }
+            </fieldset>
+
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

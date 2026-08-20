@@ -1,0 +1,56 @@
+@model BTBS420.RecruitmentSystem.Web.ViewModels.Interviews.InterviewIndexViewModel
+
+@{
+    ViewData["Title"] = "Mülakatlar";
+}
+
+<h1 class="h2 mb-4">Mülakatlar</h1>
+
+@if (Model.Interviews.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+            <p class="text-body-secondary mb-0">Kapsamınızda mülakat bulunamadı.</p>
+        </div>
+    </div>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Aday</th>
+                <th scope="col">İlan</th>
+                <th scope="col">Tür</th>
+                <th scope="col">Başlangıç</th>
+                <th scope="col">Bitiş</th>
+                <th scope="col">Durum</th>
+                <th scope="col" class="text-end">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var interview in Model.Interviews)
+            {
+                <tr>
+                    <td>@interview.CandidateFullName</td>
+                    <td>@interview.JobPostingTitle</td>
+                    <td>@interview.InterviewTypeLabel</td>
+                    <td>@interview.StartAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@interview.EndAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>
+                        <span class="status-pill @(interview.StatusLabel switch
+                        {
+                            "Planlandı" => "status-interview",
+                            "Tamamlandı" => "status-hired",
+                            "İptal Edildi" => "status-neutral",
+                            _ => "status-neutral"
+                        })">@interview.StatusLabel</span>
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary" asp-controller="Interviews" asp-action="Details" asp-route-id="@interview.Id">Detay</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

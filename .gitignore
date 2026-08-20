@@ -274,6 +274,9 @@ ServiceFabricBackup/
 *.ldf
 *.ndf
 
+# Uploaded candidate documents (stored outside wwwroot, never committed)
+src/BTBS420.RecruitmentSystem.Web/App_Data/
+
 # Business Intelligence projects
 *.rdl.data
 *.bim.layout
@@ -480,3 +483,5 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+*.bak
